@@ -515,8 +515,6 @@ class Decoder(srd.Decoder):
         s = (bits >> 0x1) & 0x7F
         s1 = 'read' if (bits & 0x01) == 1 else 'write'
         s2 = 'R' if (bits & 0x01) == 1 else 'W'
-        #self.putbits(7, 1, self.bits, [15, ['Address code: %02X' % s, 'Addr code: %02X' % s, 'Addr', 'A']])
-        #self.putbits(0, 0, self.bits, [17, ['R/W bit: ' + s1, 'R/W', 'RW', s2]])
 
     def handle_smbus_parser(self, data):
         smbus = {
@@ -531,27 +529,24 @@ class Decoder(srd.Decoder):
         Data = [self.packets[j][3] for j in range(0, 4)]
         smbus = self.handle_smbus_parser(Data)
 
-        self.put(self.packets[0][0], self.packets[3][1], self.out_ann, [3, 
-        ['SMBus Addr: %02X | Protocol: %02X | Lenght: %02X | BMC Slave Addr: %02X' % 
-        (smbus[0][1], smbus[1][1], smbus[2][1], smbus[3][1]), 
-        'SMBus: %02X | Prtcl: %02X | Len: %02X | Slv Addr: %02X' % 
-        (smbus[0][1], smbus[1][1], smbus[2][1], smbus[3][1]), 
-        'SA: %02X | P: %02X | L: %02X | BA: %02X' % 
-        (smbus[0][1], smbus[1][1], smbus[2][1], smbus[3][1]), 
-        'S']])
         self.put(self.packets[0][0], self.packets[3][1], self.out_ann, [12, ['SMBus header ', 'SMBus header', 'SBH']])
+        self.put(self.packets[0][0], self.packets[3][1], self.out_ann, [3, 
+        ['%s: %02X | %s: %02X | %s: %02X | %s: %02X' % (smbus[0][2], smbus[0][1], smbus[1][2], smbus[1][1], smbus[2][2], smbus[2][1], smbus[3][2], smbus[3][1]), 
+        '%s: %02X | %s: %02X | %s: %02X | %s: %02X' % (smbus[0][0], smbus[0][1], smbus[1][0], smbus[1][1], smbus[2][0], smbus[2][1], smbus[3][0], smbus[3][1]), 
+        '%s | %s | %s | %s' % (smbus[0][0], smbus[1][0], smbus[2][0], smbus[3][0]), 
+        'S']])
         
     def handle_mctp_parser(self, data):
         mctp = {
-            0 :     ["Hdr Ver",             data[0],                        "MCTP version"],
-            1 :     ["DE ID",               data[1],                        "Destination endpoint ID"],
-            2 :     ["SE ID",               data[2],                        "Source endpoint ID"],
+            0 :     ["HdrVer",             data[0],                        "MCTP version"],
+            1 :     ["DstID",               data[1],                        "Destination endpoint ID"],
+            2 :     ["SstID",               data[2],                        "Source endpoint ID"],
             3 :     ["Flg",                 data[3],                        "flags"],
-            4 :     ["SOM",                 bool(data[3] & 0x80),        "Start Of Message"],
-            5 :     ["EOM",                 bool(data[3] & 0x40),        "End Of Message"],
-            6 :     ["PSN",                 (data[3] >> 4) & 0x3,        "Packet sequence number"],
-            7 :     ["TO",                  bool(data[3] & 0x8),         "Tag Owner"],
-            8 :     ["MT",                  (data[3] & 0x7),             "Message Tag"],
+            4 :     ["SOM",                 bool(data[3] & 0x80),           "   Start Of Message"],
+            5 :     ["EOM",                 bool(data[3] & 0x40),           "   End Of Message"],
+            6 :     ["PSN",                 (data[3] >> 4) & 0x3,           "   Packet sequence number"],
+            7 :     ["TO",                  bool(data[3] & 0x8),            "   Tag Owner"],
+            8 :     ["MT",                  (data[3] & 0x7),                "   Message Tag"],
         }
         
         return mctp
@@ -559,17 +554,16 @@ class Decoder(srd.Decoder):
     def handle_mctp(self):
         Data = [self.packets[j][3] for j in range(4, 8)]
         mctp = self.handle_mctp_parser(Data)
+        
         self.SOM = mctp[4][1]
         self.EOM = mctp[5][1]
-        self.put(self.packets[4][0], self.packets[7][1], self.out_ann, [4, 
-        ['MCTP version: %02X | EID: %02X → %02X | Flags: SOM %r EOM %r SEQ %02X TO %d MsgTag %02X' % 
-        (mctp[0][1], mctp[1][1], mctp[2][1], mctp[4][1], mctp[5][1], mctp[6][1], mctp[7][1], mctp[8][1]), 
-        'MCTP: %02X | EID: %02X → %02X | Flags %02X' % 
-        (mctp[0][1], mctp[1][1], mctp[2][1], mctp[3][1]), 
-        '%02X | %02X → %02X | %02X' % 
-        (mctp[0][1], mctp[1][1], mctp[2][1], mctp[3][1]), 
-        'Mc']])
+        
         self.put(self.packets[4][0], self.packets[7][1], self.out_ann, [13, ['MCTP Header', 'MCTP', 'MH']])
+        self.put(self.packets[4][0], self.packets[7][1], self.out_ann, [4, 
+        ['%s: %02X | %s: %02X → %s %02X | %s %r %s %r %s %02X %s %d %s %02X' % (mctp[0][2], mctp[0][1], mctp[1][2], mctp[1][1], mctp[2][2], mctp[2][1], mctp[4][2], mctp[4][1], mctp[5][2], mctp[5][1], mctp[6][2], mctp[6][1], mctp[7][2], mctp[7][1], mctp[8][2], mctp[8][1]), 
+        '%s: %02X | %s: %02X → %s %02X | %s %r %s %r %s %02X %s %d %s %02X' % (mctp[0][0], mctp[0][1], mctp[1][0], mctp[1][1], mctp[2][0], mctp[2][1], mctp[4][0], mctp[4][1], mctp[5][0], mctp[5][1], mctp[6][0], mctp[6][1], mctp[7][0], mctp[7][1], mctp[8][0], mctp[8][1]), 
+        '%s | %s → %s | %s' % (mctp[0][0], mctp[1][0], mctp[2][0], mctp[3][0]), 
+        'Mc']])
 
     def handle_mi_parser(self, data):
         nvme = {
@@ -593,12 +587,9 @@ class Decoder(srd.Decoder):
         self.msgMiType       = NVME_MI_MSG_TYPES.get(nvme[3][1], 'Reserved')
         
         self.put(self.packets[8][0], self.packets[11][1], self.out_ann, [3, 
-        ['Integrity Check: %r | Message Type: %s | Request or Response: %d | NVMeMI Message type: %s | Command Slot: %d | CIAP: %d | MEB: %d' % 
-        (nvme[0][1], msgType, nvme[2][1], self.msgMiType, nvme[4][1], nvme[5][1], nvme[6][1]), 
-        'IC: %r | %s | ROR: %d | %s | CSI: %d | CIAP: %d | MEB: %d' % 
-        (nvme[0][1], msgType, nvme[2][1], self.msgMiType, nvme[4][1], nvme[5][1], nvme[6][1]), 
-        'IC %d | MT %02X | ROR %d | NMIMT %02X | CSI %d | CIAP %d | MEB %d' % 
-        (nvme[0][1], nvme[1][1], nvme[2][1], nvme[3][1], nvme[4][1], nvme[5][1], nvme[6][1]), 
+        ['%s: %r | %s: %s | %s: %d | %s: %s | %s: %d | %s: %d | %s: %d' % (nvme[0][2], nvme[0][1], nvme[1][2], msgType, nvme[2][2], nvme[2][1], nvme[3][2], self.msgMiType, nvme[4][2], nvme[4][1], nvme[5][2], nvme[5][1], nvme[6][2], nvme[6][1]), 
+        '%s %r | %s %02X | %s %d | %s %02X | %s %d | %s %d | %s %d' % (nvme[0][0], nvme[0][1], nvme[1][0], nvme[1][1], nvme[2][0], nvme[2][1], nvme[3][0], nvme[3][1], nvme[4][0], nvme[4][1], nvme[5][0], nvme[5][1], nvme[6][0], nvme[6][1]), 
+        '%s | %s | %s | %s | %s | %s | %s' % (nvme[0][0], nvme[1][0], nvme[2][0], nvme[3][0], nvme[4][0], nvme[5][0], nvme[6][0]), 
         'Mi']])
         self.put(self.packets[8][0], self.packets[11][1], self.out_ann, [14, ['NVMe-MI Header', 'MI header', 'NMH']])
     
