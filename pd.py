@@ -637,22 +637,6 @@ class Decoder(srd.Decoder):
 
     def handle_mi_payload_request(self, data, firstPacket, Offset):
         SizeData = len(data)
-        # PayData = 0
-        # for i in data:
-            # PayData = (PayData << 8) | i
-        
-        # self.put(self.packets[firstPacket][0], self.packets[firstPacket + SizeData - 1][1], self.out_ann, [5, ['Payload Firstbyte = %d | Offset = %d | %X' % (firstPacket, Offset, SizeData), 'Pld %d | %d' % (firstPacket, Offset), 'S']])
-        # NumPacket = 0
-        # bits = 0
-        # for i in range(firstPacket, (firstPacket + SizeData), 4):
-            # bit1 = (i * 8)
-            # bit2 = ((i + 4) * 8)
-            # for bitoff in self.bytesXbits[bit1:bit2]:
-                # bits = (bits << 1) | bitoff
-            # dataPrint = [15, ['packet %d %d %d %08X %d' % (NumPacket, bit1, bit2, bits, 1), 'pckt %d' % NumPacket, '%d'%NumPacket]]
-            # self.put(self.packets[i][0], self.packets[i+3][1], self.out_ann, dataPrint)
-            # bits = 0
-            # NumPacket += 1
         s = 'handle_request_%s' % self.msgMiType.lower().replace(' ', '_')
         handle_state = getattr(self, s)
         if s == 'handle_request_nvme_admin_command':
@@ -662,27 +646,9 @@ class Decoder(srd.Decoder):
         
     def handle_mi_payload_response(self, data, firstPacket, Offset):
         SizeData = len(data)
-        # self.put(self.packets[firstPacket][0], self.packets[firstPacket + SizeData - 1][1], self.out_ann, [5, ['Payload Firstbyte = %d | Offset = %d' % (firstPacket, Offset), 'Pld %d | %d' % (firstPacket, Offset), 'S']])
-        # NumPacket = 0
-        # bits = 0
-        # for i in range(firstPacket, (firstPacket + SizeData), 4):
-            # bit1 = (i * 8)
-            # bit2 = ((i + 4) * 8)
-            # for bitoff in self.bytesXbits[bit1:bit2]:
-                # bits = (bits << 1) | bitoff
-            # dataPrint = [15, ['packet %d %d %d %08X %d' % (NumPacket, bit1, bit2, bits, 1), 'pckt %d' % NumPacket, '%d'%NumPacket]]
-            # self.put(self.packets[i][0], self.packets[i+3][1], self.out_ann, dataPrint)
-            # bits = 0
-            # NumPacket += 1
-        #self.handle_response_control_primitive()
-        # self.handle_response_nvme_mi_command()
-        # self.handle_response_nvme_admin_command()
         s = 'handle_response_%s' % self.msgMiType.lower().replace(' ', '_')
         handle_state = getattr(self, s)
-        if s == 'handle_response_nvme_admin_command' or 'handle_response_nvme_mi_command':
-            handle_state(data, firstPacket, Offset)
-        else:
-            handle_state()
+        handle_state(data, firstPacket, Offset)
 
             
 # ------------- Request Messages
@@ -1683,8 +1649,7 @@ class Decoder(srd.Decoder):
             ctrl_prim_resp[3] = ["SSTA",    (payload & 0x03),               "       Slot Command Servicing State"]
             ctrl_prim_resp[4] = ["CMNICS",  bool((payload >> 3) & 0x01),    "       Command Message to non-Idle Command Slot"]
             ctrl_prim_resp[5] = ["BMICE",   bool((payload >> 4) & 0x01),    "       Bad Message Integrity Check Error"]
-            #Obsolete       
-            ctrl_prim_resp[6] = ["WPTT",    bool((payload >> 5) & 0x01),    "       Timeout Waiting for a Packet"]
+            ctrl_prim_resp[6] = ["WPTT",    bool((payload >> 5) & 0x01),    "       Timeout Waiting for a Packet"]                      #Obsolete  
             ctrl_prim_resp[7] = ["UTUNT",   bool((payload >> 6) & 0x01),    "       Unsupported Transmission Unit"]
             ctrl_prim_resp[8] = ["BHVS",    bool((payload >> 7) & 0x01),    "       Bad Header Version"]
             ctrl_prim_resp[9] = ["UDSTID",  bool((payload >> 8) & 0x01),    "       Unknown Destination ID"]
@@ -1702,57 +1667,45 @@ class Decoder(srd.Decoder):
         
         return ctrl_prim_resp
 
-    def handle_response_control_primitive(self):
-        Data = [self.packets[j][3] for j in range(12, len(self.packets))]
-        ctrl_prim_resp = self.handle_resp_ctrl_prim_parser(Data)
+    def handle_response_control_primitive(self, data, firstPacket, Offset):
+        Payload = []
+        Payload = [0 for i in range(0, Offset)] + data
+        Payload.extend([0 for i in range(len(Payload), 4224)])
+        ctrl_prim_resp = self.handle_resp_ctrl_prim_parser(Payload)
+
         NVMeMiStatus = NVME_MI_STATUS.get(ctrl_prim_resp[0][1], 'Reserved')
-        self.put(self.packets[12][0], self.packets[15][1], self.out_ann, [14, ['Control Primitive Response', 'Ctrl Prim Resp', 'CRP']])
+        CtrlPrimResp = {
+            0 :[12, 4, [14, ['Control Primitive Response', 'Ctrl Prim Resp', 'CRP']]],
+            1 :[],
+        }
 
     # "Pause"
         if self.LastOpcode == 0x00:
-            self.put(self.packets[12][0], self.packets[15][1], self.out_ann, [4, 
-            ['Status: %s | TAG: %02X | PFSS0: %r | PFSS1: %r' % 
-            (NVMeMiStatus, ctrl_prim_resp[1][1], ctrl_prim_resp[2][1], ctrl_prim_resp[3][1]), 
-            '%s| TAG: %02X | PFSS0: %d | PFSS1: %d' % 
-            (NVMeMiStatus, ctrl_prim_resp[1][1], ctrl_prim_resp[2][1], ctrl_prim_resp[3][1]), 
-            'Sta|Tag|PFSS0-1', 
-            'CPP']])
+            CtrlPrimResp[1] = [12, 4, [4, ['%s: %s | %s: %02X | %s: %r | %s: %r' % (ctrl_prim_resp[0][2], NVMeMiStatus, ctrl_prim_resp[1][2], ctrl_prim_resp[1][1], ctrl_prim_resp[2][2], ctrl_prim_resp[2][1], ctrl_prim_resp[3][2], ctrl_prim_resp[3][1]), '%s: %s | %s: %02X | %s: %r | %s: %r' % (ctrl_prim_resp[0][0], NVMeMiStatus, ctrl_prim_resp[1][0], ctrl_prim_resp[1][1], ctrl_prim_resp[2][0], ctrl_prim_resp[2][1], ctrl_prim_resp[3][0], ctrl_prim_resp[3][1]), '%s | %s | %s | %s' % (ctrl_prim_resp[0][0], ctrl_prim_resp[1][0], ctrl_prim_resp[2][0], ctrl_prim_resp[3][0]), 'CPP']]]
     # "Resume",
         elif self.LastOpcode == 0x01:
-            self.put(self.packets[12][0], self.packets[15][1], self.out_ann, [4, 
-            ['Status: %s | TAG: %02X' % 
-            (NVMeMiStatus, ctrl_prim_resp[1][1]), 
-            '%s| TAG: %02X' % 
-            (NVMeMiStatus, ctrl_prim_resp[1][1]), 
-            'Sta|Tag', 
-            'CPP']])
+            CtrlPrimResp[1] = [12, 4, [4, ['%s: %s | %s: %02X' % (ctrl_prim_resp[0][2], NVMeMiStatus, ctrl_prim_resp[1][2], ctrl_prim_resp[1][1]), '%s: %s | %s: %02X' % (ctrl_prim_resp[0][0], NVMeMiStatus, ctrl_prim_resp[1][0], ctrl_prim_resp[1][1]), '%s | %s' % (ctrl_prim_resp[0][0], ctrl_prim_resp[1][0]), 'CPP']]]
     # "Abort",
         elif self.LastOpcode == 0x02:
-            self.put(self.packets[12][0], self.packets[15][1], self.out_ann, [4, 
-            ['Status: %s | TAG: %02X | Command Processing Abort Status: %d' % 
-            (NVMeMiStatus, ctrl_prim_resp[1][1], ctrl_prim_resp[2][1]), 
-            '%s| TAG: %02X | CPAS: %d' % 
-            (NVMeMiStatus, ctrl_prim_resp[1][1], ctrl_prim_resp[2][1]), 
-            'Sta|Tag|CPAS', 
-            'CPP']])
+            CtrlPrimResp[1] = [12, 4, [4, ['%s: %s | %s: %02X | %s: %d' % (ctrl_prim_resp[0][2], NVMeMiStatus, ctrl_prim_resp[1][2], ctrl_prim_resp[1][1], ctrl_prim_resp[2][2], ctrl_prim_resp[2][1]), '%s: %s | %s: %02X | %s: %d' % (ctrl_prim_resp[0][0], NVMeMiStatus, ctrl_prim_resp[1][0], ctrl_prim_resp[1][1], ctrl_prim_resp[2][0], ctrl_prim_resp[2][1]), '%s | %s | %s' % (ctrl_prim_resp[0][0], ctrl_prim_resp[1][0], ctrl_prim_resp[2][0]), 'CPP']]]
     # "Get State",
         elif self.LastOpcode == 0x03:
-            self.put(self.packets[12][0], self.packets[15][1], self.out_ann, [4, 
-            ['Status: %s | TAG: %02X | SSTA: %d | CMNICS: %r | BMICE: %r | WPTT: %r | UTUNT: %r | BHVS: %r | UDSTID: %r | ITU: %r | UMEP: %r | OSPSN: %r | BUEMT: %r | BPOPL: %r | NSSRO: %r | PFLG: %r' % 
-            (NVMeMiStatus, ctrl_prim_resp[1][1], ctrl_prim_resp[3][1], ctrl_prim_resp[4][1], ctrl_prim_resp[5][1], ctrl_prim_resp[6][1], ctrl_prim_resp[7][1], ctrl_prim_resp[8][1], ctrl_prim_resp[9][1], ctrl_prim_resp[10][1], ctrl_prim_resp[11][1], ctrl_prim_resp[12][1], ctrl_prim_resp[13][1], ctrl_prim_resp[14][1], ctrl_prim_resp[15][1], ctrl_prim_resp[16][1]), 
-            '%s| TAG: %02X | Flags: %04X' % 
-            (NVMeMiStatus, ctrl_prim_resp[1][1], ctrl_prim_resp[2][1]),
-            'Sta|Tag|Flags', 
-            'CPP']])
+            CtrlPrimResp[1] = [12, 4, [4, ['%s: %s | %s: %02X | %s: %d | %s: %r | %s: %r | %s: %r | %s: %r | %s: %r | %s: %r | %s: %r | %s: %r | %s: %r | %s: %r | %s: %r | %s: %r | %s: %r' % (ctrl_prim_resp[0][2], NVMeMiStatus, ctrl_prim_resp[1][2], ctrl_prim_resp[1][1], ctrl_prim_resp[3][2], ctrl_prim_resp[3][1], ctrl_prim_resp[4][2], ctrl_prim_resp[4][1], ctrl_prim_resp[5][2], ctrl_prim_resp[5][1], ctrl_prim_resp[6][2], ctrl_prim_resp[6][1], ctrl_prim_resp[7][2], ctrl_prim_resp[7][1], ctrl_prim_resp[8][2], ctrl_prim_resp[8][1], ctrl_prim_resp[9][2], ctrl_prim_resp[9][1], ctrl_prim_resp[10][2], ctrl_prim_resp[10][1], ctrl_prim_resp[11][2], ctrl_prim_resp[11][1], ctrl_prim_resp[12][2], ctrl_prim_resp[12][1], ctrl_prim_resp[13][2], ctrl_prim_resp[13][1], ctrl_prim_resp[14][1], ctrl_prim_resp[14][1],ctrl_prim_resp[15][2], ctrl_prim_resp[15][1], ctrl_prim_resp[16][2], ctrl_prim_resp[16][1]),  '%s| %s: %02X | %s: %04X' % (ctrl_prim_resp[0][0], NVMeMiStatus, ctrl_prim_resp[1][0], ctrl_prim_resp[1][1], ctrl_prim_resp[2][0], ctrl_prim_resp[2][1]),'%s | %s | %s' % (ctrl_prim_resp[0][0], ctrl_prim_resp[1][0], ctrl_prim_resp[2][0]),  'CPP']]]
     # "Replay",
         elif self.LastOpcode == 0x04:
-            self.put(self.packets[12][0], self.packets[15][1], self.out_ann, [4, 
-            ['Status: %s | TAG: %02X | Response Replay: %r' % 
-            (NVMeMiStatus, ctrl_prim_resp[1][1], ctrl_prim_resp[2][1]), 
-            '%s| TAG: %02X | RR: %d' % 
-            (NVMeMiStatus, ctrl_prim_resp[1][1], ctrl_prim_resp[2][1]), 
-            'Sta|Tag|RR', 
-            'CPP']])
+            CtrlPrimResp[1] = [12, 4, [4, ['%s: %s | %s: %02X | %s: %r' % (ctrl_prim_resp[0][2], NVMeMiStatus, ctrl_prim_resp[1][2], ctrl_prim_resp[1][1], ctrl_prim_resp[2][2], ctrl_prim_resp[2][1]), '%s: %s | %s: %02X | %s: %r' % (ctrl_prim_resp[0][0], NVMeMiStatus, ctrl_prim_resp[1][0], ctrl_prim_resp[1][1], ctrl_prim_resp[2][0], ctrl_prim_resp[2][1]), '%s | %s | %s' % (ctrl_prim_resp[0][0], ctrl_prim_resp[1][0], ctrl_prim_resp[2][0]), 'CPP']]]
+
+        Cnt = firstPacket
+        for Idx, value in list(CtrlPrimResp.items())[::2]:
+            if CtrlPrimResp[Idx][0] >= (Offset + firstPacket) or CtrlPrimResp[Idx][1] > Offset :
+                if (Cnt + CtrlPrimResp[Idx][1]) < (firstPacket + len(data)):
+                    self.put(self.packets[Cnt][0], self.packets[Cnt + CtrlPrimResp[Idx][1] - 1][1], self.out_ann, CtrlPrimResp[Idx][2])
+                    self.put(self.packets[Cnt][0], self.packets[Cnt + CtrlPrimResp[Idx][1] - 1][1], self.out_ann, CtrlPrimResp[Idx + 1][2])
+                    Cnt += CtrlPrimResp[Idx][1]
+                else:
+                    self.put(self.packets[Cnt][0], self.packets[firstPacket + len(data) - 1][1], self.out_ann, CtrlPrimResp[Idx][2])
+                    self.put(self.packets[Cnt][0], self.packets[firstPacket + len(data) - 1][1], self.out_ann, CtrlPrimResp[Idx + 1][2])
+                    Cnt += len(data)
 
     def handle_resp_nvme_mi_parser(self, data, Offset, Len):
         nvme_mi_resp = {
@@ -2452,6 +2405,7 @@ class Decoder(srd.Decoder):
         Payload = [0 for i in range(0, Offset)] + data
         Payload.extend([0 for i in range(len(Payload), 4224)])
         admin_resp = self.handle_resp_nvme_admin_command_parser(Payload, Offset, len(data))
+        #NVMeMiStatus = NVME_MI_STATUS.get(admin_resp[0][1], 'Reserveed')
         AdminDataPrint = {
             0 :[14, ['NVMe-MI Response', 'NVMe-MI Resp', 'MIR']],
             1 :[4, ['%s: %02X' % (admin_resp[0][2], admin_resp[0][1]), '%s: %02X' % (admin_resp[0][0], admin_resp[0][1]), '%s' % (admin_resp[0][0]), 'NMR']],
@@ -2464,17 +2418,6 @@ class Decoder(srd.Decoder):
             8 :[14, ['Response Data', 'Res Data', 'RQ']],
             9 :[4, ['%s: %X' % (admin_resp[12][2], admin_resp[12][1]), '%s: %X' % (admin_resp[12][0], admin_resp[12][1]), '%s' % (admin_resp[12][0]), 'RD']],
         }
-        
-        # #NVMeMiStatus = NVME_MI_STATUS.get(admin_resp[0][1], 'Reserveed')
-        
-    # # "Get Log Page",
-        # if self.LastOpcode == 0x02:
-            # self.put(self.packets[28][0], self.packets[-6][1], self.out_ann, AdminDataPrint[8])
-            # self.put(self.packets[28][0], self.packets[-6][1], self.out_ann, AdminDataPrint[9])
-    # # "Identify",
-        # elif self.LastOpcode == 0x06:
-            # self.put(self.packets[28][0], self.packets[-6][1], self.out_ann, [14, ['Response Data', 'Res Data', 'RQ']])
-            # self.put(self.packets[28][0], self.packets[-6][1], self.out_ann, [4, ['%s: %X' % (admin_resp[12][2], admin_resp[12][1]), '%s: %X' % (admin_resp[12][0], admin_resp[12][1]), '%s' % (admin_resp[12][0]), 'RD']])
 
         j = (Offset/4) * 2 # (Offset / 4) is equal to dword N requested and *2  is the table position.
         if j >= 8:
@@ -2493,10 +2436,10 @@ class Decoder(srd.Decoder):
             self.put(self.packets[i][0], self.packets[firstPacket + len(data) - 1][1], self.out_ann, AdminDataPrint[j])
             self.put(self.packets[i][0], self.packets[firstPacket + len(data) - 1][1], self.out_ann, AdminDataPrint[j + 1])
 
-    def handle_response_pcie_command(self):
+    def handle_response_pcie_command(self, data, firstPacket, Offset):
         return
         
-    def handle_response_asynchronous_event(self):
+    def handle_response_asynchronous_event(self, data, firstPacket, Offset):
         return
 
     def handle_Message_Integrity_Check(self):
