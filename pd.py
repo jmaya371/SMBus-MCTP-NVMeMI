@@ -666,35 +666,39 @@ class Decoder(srd.Decoder):
         
         return ctrl_prim_req
 
-    def handle_request_control_primitive(self):
+    def handle_request_control_primitive(self, data, firstPacket, Offset):
+        Payload = []
+        Payload = [0 for i in range(0, Offset)] + data + [0 for i in range(len(Payload), 4224)]
         Data = [self.packets[j][3] for j in range(12, len(self.packets))]
-        ctrl_prim = self.handle_req_ctrl_prim_parser(Data)
-        CtrlPrim = NVME_CONTROL_OPCODES.get(ctrl_prim[0][1], 'Reserved')
-        self.put(self.packets[12][0], self.packets[15][1], self.out_ann, [14, ['Opcode', 'Opc', 'O']])
-        
+        ctrl_prim = self.handle_req_ctrl_prim_parser(Payload)
         self.LastOpcode = ctrl_prim[0][1]
+        CtrlPrimReq = {
+            0 :[12, 4, [14, ['Control Primitive Request', 'Ctrl Prim Rqst', 'CRQ']]],
+            1 :[],
+        }
+        CtrlPrim = NVME_CONTROL_OPCODES.get(ctrl_prim[0][1], 'Reserved')
 
     # "Get State",
-        if ctrl_prim[0][1] == 0x03:
-            self.put(self.packets[12][0], self.packets[15][1], self.out_ann, [4, 
-            ['Opcode: %s | TAG: %02X | Clear Error State Flags: %02X' % (CtrlPrim, ctrl_prim[1][1], ctrl_prim[2][1]), 
-            'OPC: %s | TAG: %02X  | CESF: %02X' % (CtrlPrim, ctrl_prim[1][1], ctrl_prim[2][1]),
-            'OPC: %02X | TAG: %02X | CESF: %d' % (ctrl_prim[0][1], ctrl_prim[1][1], ctrl_prim[2][1]), 
-            'CPG']])
+        if self.LastOpcode == 0x03:
+            CtrlPrimResp[1] = [12, 4, [4, ['%s: %s | %s: %02X | %s: %r' % (ctrl_prim[0][2], CtrlPrim, ctrl_prim[1][2], ctrl_prim[1][1], ctrl_prim[2][2], ctrl_prim[2][1]), '%s: %s | %s: %02X | %s: %r' % (ctrl_prim[0][0], CtrlPrim, ctrl_prim[1][0], ctrl_prim[1][1], ctrl_prim[2][0], ctrl_prim[2][1]), '%s | %s | %s' % (ctrl_prim[0][0], ctrl_prim[1][0], ctrl_prim[2][0]), 'CPP']]]
     # "Replay",
-        elif ctrl_prim[0][1] == 0x04:
-            self.put(self.packets[12][0], self.packets[15][1], self.out_ann, [4, 
-            ['Opcode: %s | TAG: %02X | Response Replay Offset: %02X' % (CtrlPrim, ctrl_prim[1][1], ctrl_prim[2][1]), 
-            'OPC: %s | TAG: %02X  | RRO: %02X' % (CtrlPrim, ctrl_prim[1][1], ctrl_prim[2][1]), 
-            'OPC: %02X | TAG: %02X | RRO: %02X' % (ctrl_prim[0][1], ctrl_prim[1][1], ctrl_prim[2][1]), 
-            'CPRY']])
+        elif self.LastOpcode == 0x04:
+            CtrlPrimResp[1] = [12, 4, [4, ['%s: %s | %s: %02X | %s: %02X' % (ctrl_prim[0][2], CtrlPrim, ctrl_prim[1][2], ctrl_prim[1][1], ctrl_prim[2][2], ctrl_prim[2][1]), '%s: %s | %s: %02X | %s: %02X' % (ctrl_prim[0][0], CtrlPrim, ctrl_prim[1][0], ctrl_prim[1][1], ctrl_prim[2][0], ctrl_prim[2][1]), '%s | %s | %s' % (ctrl_prim[0][0], ctrl_prim[1][0], ctrl_prim[2][0]), 'CPP']]]
     # "Pause", "Resume", "Abort",
-        elif ctrl_prim[0][1] < 0x03:
-            self.put(self.packets[12][0], self.packets[15][1], self.out_ann, [4, 
-            ['Opcode: %s | TAG: %02X' % (CtrlPrim, ctrl_prim[1][1]), 
-            'OPC: %s | TAG: %02X' % (CtrlPrim, ctrl_prim[1][1]), 
-            'Opc: %02X | TAG: %02X' % (ctrl_prim[0][1], ctrl_prim[1][1]), 
-            'CP']])            
+        elif self.LastOpcode < 0x03:           
+            CtrlPrimReq[1] = [12, 4, [4, ['%s: %s | %s: %02X' % (ctrl_prim[0][2], CtrlPrim, ctrl_prim[1][2], ctrl_prim[1][1]), '%s: %s | %s: %02X' % (ctrl_prim[0][0], CtrlPrim, ctrl_prim[1][0], ctrl_prim[1][1]), '%s | %s' % (ctrl_prim[0][0], ctrl_prim[1][0]), 'CP']]]
+
+        Cnt = firstPacket
+        for Idx, value in list(CtrlPrimReq.items())[::2]:
+            if CtrlPrimReq[Idx][0] >= (Offset + firstPacket) or CtrlPrimReq[Idx][1] > Offset :
+                if (Cnt + CtrlPrimReq[Idx][1]) < (firstPacket + len(data)):
+                    self.put(self.packets[Cnt][0], self.packets[Cnt + CtrlPrimReq[Idx][1] - 1][1], self.out_ann, CtrlPrimReq[Idx][2])
+                    self.put(self.packets[Cnt][0], self.packets[Cnt + CtrlPrimReq[Idx][1] - 1][1], self.out_ann, CtrlPrimReq[Idx + 1][2])
+                    Cnt += CtrlPrimReq[Idx][1]
+                else:
+                    self.put(self.packets[Cnt][0], self.packets[firstPacket + len(data) - 1][1], self.out_ann, CtrlPrimReq[Idx][2])
+                    self.put(self.packets[Cnt][0], self.packets[firstPacket + len(data) - 1][1], self.out_ann, CtrlPrimReq[Idx + 1][2])
+                    Cnt += len(data)
 
     def handle_req_nvme_mi_parser(self, data):
         nvme_mi_req = {
@@ -1971,7 +1975,7 @@ class Decoder(srd.Decoder):
         
         return nvme_mi_resp
 
-    def handle_response_nvme_mi_command(self, data, firstPacket, Offset):        
+    def handle_response_nvme_mi_command(self, data, firstPacket, Offset):          
         Payload = []
         Payload = [0 for i in range(0, Offset)] + data
         Payload.extend([0 for i in range(len(Payload), 4224)])
