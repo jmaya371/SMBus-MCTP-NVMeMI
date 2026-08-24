@@ -618,12 +618,6 @@ class Decoder(srd.Decoder):
                 '%02X | %.1f s' % (status, MPRT), 
                 'S']])
             elif status == 0:
-                #self.handle_response_control_primitive()
-                #self.handle_response_nvme_mi_command()
-                #self.handle_response_nvme_admin_command()
-                # s = 'handle_response_%s' % self.msgMiType.lower().replace(' ', '_')
-                # handle_state = getattr(self, s)
-                # handle_state()
                 self.handle_mi_payload_response(data, firstPacket, Offset)
             else:
                 self.put(self.packets[12][0], self.packets[15][1], self.out_ann, [14, ['Status', 'Sta', 'S']])
@@ -639,18 +633,28 @@ class Decoder(srd.Decoder):
         SizeData = len(data)
         s = 'handle_request_%s' % self.msgMiType.lower().replace(' ', '_')
         handle_state = getattr(self, s)
-        if s == 'handle_request_nvme_admin_command':
-            handle_state(data, firstPacket, Offset)
-        else:
-            handle_state()
-        
+        handle_state(data, firstPacket, Offset)
+
     def handle_mi_payload_response(self, data, firstPacket, Offset):
         SizeData = len(data)
         s = 'handle_response_%s' % self.msgMiType.lower().replace(' ', '_')
         handle_state = getattr(self, s)
         handle_state(data, firstPacket, Offset)
 
-            
+    def handle_Message_Integrity_Check(self):
+        self.put(self.packets[-5][0], self.packets[-2][1], self.out_ann, [7, ['Message Intigrity Check', 'Mes Int Check', 'MIC']])
+        MIC = self.packets[-5][3] | (self.packets[-4][3] << 8) | (self.packets[-3][3] << 16) | (self.packets[-2][3] << 24)
+        self.put(self.packets[-5][0], self.packets[-2][1], self.out_ann, [4, 
+        ['Messages Integrity Check ▸ %08X' % MIC,                  'MIC: %08X' % MIC, 
+        '%08X' % MIC,                               'MIC']])
+
+    def handle_PEC(self):
+        self.put(self.packets[-1][0], self.packets[-1][1], self.out_ann, [7, ['Packet Error Checking', 'Pck Error Check', 'PEC']])
+        PEC = self.packets[-1][3]
+        self.put(self.packets[-1][0], self.packets[-1][1], self.out_ann, [4, 
+        ['Packet Error Checking ▸ %02X' % PEC,                  'PEC: %02X' % PEC, 
+        '%02X' % PEC,                               'PEC']])
+
 # ------------- Request Messages
 
     def handle_req_ctrl_prim_parser(self, data):
@@ -669,14 +673,15 @@ class Decoder(srd.Decoder):
     def handle_request_control_primitive(self, data, firstPacket, Offset):
         Payload = []
         Payload = [0 for i in range(0, Offset)] + data + [0 for i in range(len(Payload), 4224)]
-        Data = [self.packets[j][3] for j in range(12, len(self.packets))]
         ctrl_prim = self.handle_req_ctrl_prim_parser(Payload)
-        self.LastOpcode = ctrl_prim[0][1]
+        if self.SOM == 1 :
+            self.LastOpcode = ctrl_prim[0][1]
+            CtrlPrim = NVME_CONTROL_OPCODES.get(ctrl_prim[0][1], 'Reserved')
+            
         CtrlPrimReq = {
             0 :[12, 4, [14, ['Control Primitive Request', 'Ctrl Prim Rqst', 'CRQ']]],
             1 :[],
         }
-        CtrlPrim = NVME_CONTROL_OPCODES.get(ctrl_prim[0][1], 'Reserved')
 
     # "Get State",
         if self.LastOpcode == 0x03:
@@ -857,303 +862,129 @@ class Decoder(srd.Decoder):
             return
         return nvme_mi_req
 
-    def handle_request_nvme_mi_command(self):
+    def handle_request_nvme_mi_command(self, data, firstPacket, Offset):
+        Payload = []
+        Payload = [0 for i in range(0, Offset)] + data + [0 for i in range(len(Payload), 4224)]
         Data = [self.packets[j][3] for j in range(12, len(self.packets))]
         nvme_mi_req = self.handle_req_nvme_mi_parser(Data)
+        
+        if self.SOM == 1 :
+            self.LastOpcode = nvme_mi_req[0][1]
+        
         NVMe_Mi = NVME_MI_OPCODES.get(nvme_mi_req[0][1], "Reserved")
         
-        self.LastOpcode = nvme_mi_req[0][1]
+        NvmeMiReq = {
+            0 :[12, 4, [14, ['Opcode', 'Opc', 'O']]],
+            1 :[12, 4, [3, ["NVMe MI command: %s" % NVMe_Mi, 'MI command: %s' % NVMe_Mi, 'Opc: %02X' % nvme_mi_req[0][1], 'opc']]],
+            2 :[16, 4, [14, ['DWORD 0', 'DW 0', 'D0']]],
+            3 :[],
+            4 :[16, 4, [14, ['DWORD 0', 'DW 0', 'D0']]],
+            5 :[],
+        }
 
-        self.put(self.packets[12][0], self.packets[15][1], self.out_ann, [3, 
-        ["NVMe MI command: %s" % NVMe_Mi, 
-        'MI command: %s' % NVMe_Mi, 
-        'Opc: %02X' % nvme_mi_req[0][1], 
-        'opc']])
-
-        self.put(self.packets[12][0], self.packets[15][1], self.out_ann, [14, ['Opcode', 'Opc', 'O']])
-        self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [14, ['DWORD 0', 'DW 0', 'D0']])
-        self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [14, ['DWORD 1', 'DW 1', 'D1']])
     # "Read NVMe-MI Data Structure",
-        if nvme_mi_req[0][1] == 0x00:
+        if self.LastOpcode == 0x00:
             self.LastDytp = nvme_mi_req[3][1]
-            self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-            ['%s: %04X | %s: %02X | %s: %02X' % 
-            (nvme_mi_req[1][2], nvme_mi_req[1][1], nvme_mi_req[2][2], nvme_mi_req[2][1], nvme_mi_req[3][2], nvme_mi_req[3][1]), 
-            '%s: %04X | %s: %02X | %s: %02X' % 
-            (nvme_mi_req[1][0], nvme_mi_req[1][1], nvme_mi_req[2][0], nvme_mi_req[2][1], nvme_mi_req[3][0], nvme_mi_req[3][1]), 
-            '%s | %s | %s' %
-            (nvme_mi_req[1][0], nvme_mi_req[2][0], nvme_mi_req[3][0]), 
-            'DW0']])
-            
-            self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [4, 
-            ['%s: %02X' % (nvme_mi_req[4][2], nvme_mi_req[4][1]), 
-            '%s: %02X' % (nvme_mi_req[4][0], nvme_mi_req[4][1]),
-            '%s' % nvme_mi_req[4][0], 
-            'DW1']])
+            NvmeMiReq[3] = [16, 4, [4, ['%s: %04X | %s: %02X | %s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1], nvme_mi_req[2][2], nvme_mi_req[2][1], nvme_mi_req[3][2], nvme_mi_req[3][1]), '%s: %04X | %s: %02X | %s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1], nvme_mi_req[2][0], nvme_mi_req[2][1], nvme_mi_req[3][0], nvme_mi_req[3][1]), '%s | %s | %s' %(nvme_mi_req[1][0], nvme_mi_req[2][0], nvme_mi_req[3][0]), 'DW0']]]
+            NvmeMiReq[5] = [20, 4, [4, ['%s: %02X' % (nvme_mi_req[4][2], nvme_mi_req[4][1]), '%s: %02X' % (nvme_mi_req[4][0], nvme_mi_req[4][1]),'%s' % nvme_mi_req[4][0], 'DW1']]]
     # "NVM Subsystem Health Status Poll",
-        elif nvme_mi_req[0][1] == 0x01:
-            self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-            ['Reserved: 00 00 00 00', 
-            'RSVD: 00 00 00 00', 
-            'RSVD', 
-            'DW0']])
-            
-            self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [4, 
-            ['%s: %r' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), 
-            '%s: %r' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),
-            '%s' % nvme_mi_req[1][0], 
-            'DW1']])
+        elif self.LastOpcode == 0x01:
+            NvmeMiReq[3] = [16, 4, [4, ['Reserved: 00 00 00 00', 'RSVD: 00 00 00 00', 'RSVD', 'DW0']]]
+            NvmeMiReq[5] = [20, 4, [4, ['%s: %r' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), '%s: %r' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),'%s' % nvme_mi_req[1][0], 'DW1']]]
     # "Controller Health Status Poll",
-        elif nvme_mi_req[0][1] == 0x02:
-            self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [3, 
-            ['%s: %04X | %s: %02X | %s: %r | %s: %r | %s: %r | %s: %r' %
-            (nvme_mi_req[1][2], nvme_mi_req[1][1], nvme_mi_req[2][2], nvme_mi_req[2][1], nvme_mi_req[3][2], nvme_mi_req[3][1], nvme_mi_req[4][2], nvme_mi_req[4][1], nvme_mi_req[5][2], nvme_mi_req[5][1], nvme_mi_req[6][2], nvme_mi_req[6][1]), 
-            '%s: %04X | %s: %02X | %s: %r | %s: %r | %s: %r | %s: %r' %
-            (nvme_mi_req[1][0], nvme_mi_req[1][1], nvme_mi_req[2][0], nvme_mi_req[2][1], nvme_mi_req[3][0], nvme_mi_req[3][1], nvme_mi_req[4][0], nvme_mi_req[4][1], nvme_mi_req[5][0], nvme_mi_req[5][1], nvme_mi_req[6][0], nvme_mi_req[6][1]), 
-            '%s | %s | %s | %s | %s | %s' %
-            (nvme_mi_req[1][0], nvme_mi_req[2][0], nvme_mi_req[3][0], nvme_mi_req[4][0], nvme_mi_req[5][0], nvme_mi_req[6][0]), 
-            'DW0']])
-            
-            self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [3, 
-            ['%s: %r | %s: %r | %s: %r | %s: %r | %s: %r | %s: %r' %
-            (nvme_mi_req[7][2], nvme_mi_req[7][1], nvme_mi_req[8][2], nvme_mi_req[8][1], nvme_mi_req[9][2], nvme_mi_req[9][1], nvme_mi_req[10][2], nvme_mi_req[10][1], nvme_mi_req[11][2], nvme_mi_req[11][1], nvme_mi_req[12][2], nvme_mi_req[12][1]), 
-            '%s: %04X | %s: %02X | %s: %r | %s: %r | %s: %r | %s: %r' %
-            (nvme_mi_req[7][0], nvme_mi_req[7][1], nvme_mi_req[8][0], nvme_mi_req[8][1], nvme_mi_req[9][0], nvme_mi_req[9][1], nvme_mi_req[10][0], nvme_mi_req[10][1], nvme_mi_req[11][0], nvme_mi_req[11][1], nvme_mi_req[12][0], nvme_mi_req[12][1]), 
-            '%s | %s | %s | %s | %s | %s' %
-            (nvme_mi_req[7][0], nvme_mi_req[8][0], nvme_mi_req[9][0], nvme_mi_req[10][0], nvme_mi_req[11][0], nvme_mi_req[12][0]), 
-            'DW0']])
+        elif self.LastOpcode == 0x02:
+            NvmeMiReq[3] = [16, 4, [3, ['%s: %04X | %s: %02X | %s: %r | %s: %r | %s: %r | %s: %r' %(nvme_mi_req[1][2], nvme_mi_req[1][1], nvme_mi_req[2][2], nvme_mi_req[2][1], nvme_mi_req[3][2], nvme_mi_req[3][1], nvme_mi_req[4][2], nvme_mi_req[4][1], nvme_mi_req[5][2], nvme_mi_req[5][1], nvme_mi_req[6][2], nvme_mi_req[6][1]), '%s: %04X | %s: %02X | %s: %r | %s: %r | %s: %r | %s: %r' %(nvme_mi_req[1][0], nvme_mi_req[1][1], nvme_mi_req[2][0], nvme_mi_req[2][1], nvme_mi_req[3][0], nvme_mi_req[3][1], nvme_mi_req[4][0], nvme_mi_req[4][1], nvme_mi_req[5][0], nvme_mi_req[5][1], nvme_mi_req[6][0], nvme_mi_req[6][1]), '%s | %s | %s | %s | %s | %s' %(nvme_mi_req[1][0], nvme_mi_req[2][0], nvme_mi_req[3][0], nvme_mi_req[4][0], nvme_mi_req[5][0], nvme_mi_req[6][0]), 'DW0']]]
+            NvmeMiReq[5] = [20, 4, [3, ['%s: %r | %s: %r | %s: %r | %s: %r | %s: %r | %s: %r' %(nvme_mi_req[7][2], nvme_mi_req[7][1], nvme_mi_req[8][2], nvme_mi_req[8][1], nvme_mi_req[9][2], nvme_mi_req[9][1], nvme_mi_req[10][2], nvme_mi_req[10][1], nvme_mi_req[11][2], nvme_mi_req[11][1], nvme_mi_req[12][2], nvme_mi_req[12][1]), '%s: %04X | %s: %02X | %s: %r | %s: %r | %s: %r | %s: %r' %(nvme_mi_req[7][0], nvme_mi_req[7][1], nvme_mi_req[8][0], nvme_mi_req[8][1], nvme_mi_req[9][0], nvme_mi_req[9][1], nvme_mi_req[10][0], nvme_mi_req[10][1], nvme_mi_req[11][0], nvme_mi_req[11][1], nvme_mi_req[12][0], nvme_mi_req[12][1]), '%s | %s | %s | %s | %s | %s' %(nvme_mi_req[7][0], nvme_mi_req[8][0], nvme_mi_req[9][0], nvme_mi_req[10][0], nvme_mi_req[11][0], nvme_mi_req[12][0]), 'DW0']]]
     # "Configuration Set",
-        elif nvme_mi_req[0][1] == 0x03:
+        elif self.LastOpcode == 0x03:
             self.LastCID = nvme_mi_req[1][1]
             if nvme_mi_req[1][1] == 0x01:
-                self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-                ['%s: %02X | %s: %02X | %s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1], nvme_mi_req[2][2], nvme_mi_req[2][1], nvme_mi_req[3][2], nvme_mi_req[3][1]), 
-                '%s: %02X | %s: %02X | %s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1], nvme_mi_req[2][0], nvme_mi_req[2][1], nvme_mi_req[3][0], nvme_mi_req[3][1]), 
-                '%s | %s | %s' % (nvme_mi_req[1][0], nvme_mi_req[2][0], nvme_mi_req[3][0]), 
-                'DW0']])
-                
-                self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [4, 
-                ['Reserved: 00 00 00 00', 
-                'RSVD: 00 00 00 00', 
-                'RSVD', 
-                'DW1']])
+                NvmeMiReq[3] = [16, 4, [4, ['%s: %02X | %s: %02X | %s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1], nvme_mi_req[2][2], nvme_mi_req[2][1], nvme_mi_req[3][2], nvme_mi_req[3][1]), '%s: %02X | %s: %02X | %s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1], nvme_mi_req[2][0], nvme_mi_req[2][1], nvme_mi_req[3][0], nvme_mi_req[3][1]), '%s | %s | %s' % (nvme_mi_req[1][0], nvme_mi_req[2][0], nvme_mi_req[3][0]), 'DW0']]]
+                NvmeMiReq[5] = [20, 4, [4, ['Reserved: 00 00 00 00', 'RSVD: 00 00 00 00', 'RSVD', 'DW1']]]
             elif nvme_mi_req[1][1] == 0x02:
-                self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-                ['%s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), 
-                '%s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),
-                '%s' % nvme_mi_req[1][0], 
-                'DW0']])
-
-                self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [3, 
-                ['%s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d' % 
-                (nvme_mi_req[10][2], nvme_mi_req[10][1], nvme_mi_req[11][2], nvme_mi_req[11][1], nvme_mi_req[12][2], nvme_mi_req[12][1], nvme_mi_req[13][2], nvme_mi_req[13][1], nvme_mi_req[14][2], nvme_mi_req[14][1], nvme_mi_req[2][2], nvme_mi_req[2][1], nvme_mi_req[3][2], nvme_mi_req[3][1], nvme_mi_req[4][2], nvme_mi_req[4][1], nvme_mi_req[5][2], nvme_mi_req[5][1], nvme_mi_req[6][2], nvme_mi_req[6][1], nvme_mi_req[7][2], nvme_mi_req[7][1], nvme_mi_req[8][2], nvme_mi_req[8][1], nvme_mi_req[9][2], nvme_mi_req[9][1]),
-                '%s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d' % 
-                (nvme_mi_req[10][0], nvme_mi_req[10][1], nvme_mi_req[11][0], nvme_mi_req[11][1], nvme_mi_req[12][0], nvme_mi_req[12][1], nvme_mi_req[13][0], nvme_mi_req[13][1], nvme_mi_req[14][0], nvme_mi_req[14][1], nvme_mi_req[2][0], nvme_mi_req[2][1], nvme_mi_req[3][0], nvme_mi_req[3][1], nvme_mi_req[4][0], nvme_mi_req[4][1], nvme_mi_req[5][0], nvme_mi_req[5][1], nvme_mi_req[6][0], nvme_mi_req[6][1], nvme_mi_req[7][0], nvme_mi_req[7][1], nvme_mi_req[8][0], nvme_mi_req[8][1], nvme_mi_req[9][0], nvme_mi_req[9][1]),
-                '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s' % 
-                (nvme_mi_req[10][0], nvme_mi_req[11][0], nvme_mi_req[12][0], nvme_mi_req[13][0], nvme_mi_req[14][0], nvme_mi_req[2][0], nvme_mi_req[3][0], nvme_mi_req[4][0], nvme_mi_req[5][0], nvme_mi_req[6][0], nvme_mi_req[7][0], nvme_mi_req[8][0], nvme_mi_req[9][0]),
-                'bits (12 - 0) %d %d %d %d %d %d %d %d %d %d %d %d %d' % 
-                (nvme_mi_req[10][1], nvme_mi_req[11][1], nvme_mi_req[12][1], nvme_mi_req[13][1], nvme_mi_req[14][1], nvme_mi_req[2][1], nvme_mi_req[3][1], nvme_mi_req[4][1], nvme_mi_req[5][1], nvme_mi_req[6][1], nvme_mi_req[7][1], nvme_mi_req[8][1], nvme_mi_req[9][1]),
-                'DW1']])
+                NvmeMiReq[3] = [16, 4, [4, ['%s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), '%s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),'%s' % nvme_mi_req[1][0], 'DW0']]]
+                NvmeMiReq[5] = [20, 4, [3, ['%s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d' % (nvme_mi_req[10][2], nvme_mi_req[10][1], nvme_mi_req[11][2], nvme_mi_req[11][1], nvme_mi_req[12][2], nvme_mi_req[12][1], nvme_mi_req[13][2], nvme_mi_req[13][1], nvme_mi_req[14][2], nvme_mi_req[14][1], nvme_mi_req[2][2], nvme_mi_req[2][1], nvme_mi_req[3][2], nvme_mi_req[3][1], nvme_mi_req[4][2], nvme_mi_req[4][1], nvme_mi_req[5][2], nvme_mi_req[5][1], nvme_mi_req[6][2], nvme_mi_req[6][1], nvme_mi_req[7][2], nvme_mi_req[7][1], nvme_mi_req[8][2], nvme_mi_req[8][1], nvme_mi_req[9][2], nvme_mi_req[9][1]),'%s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d | %s: %d' % (nvme_mi_req[10][0], nvme_mi_req[10][1], nvme_mi_req[11][0], nvme_mi_req[11][1], nvme_mi_req[12][0], nvme_mi_req[12][1], nvme_mi_req[13][0], nvme_mi_req[13][1], nvme_mi_req[14][0], nvme_mi_req[14][1], nvme_mi_req[2][0], nvme_mi_req[2][1], nvme_mi_req[3][0], nvme_mi_req[3][1], nvme_mi_req[4][0], nvme_mi_req[4][1], nvme_mi_req[5][0], nvme_mi_req[5][1], nvme_mi_req[6][0], nvme_mi_req[6][1], nvme_mi_req[7][0], nvme_mi_req[7][1], nvme_mi_req[8][0], nvme_mi_req[8][1], nvme_mi_req[9][0], nvme_mi_req[9][1]),'%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s' % (nvme_mi_req[10][0], nvme_mi_req[11][0], nvme_mi_req[12][0], nvme_mi_req[13][0], nvme_mi_req[14][0], nvme_mi_req[2][0], nvme_mi_req[3][0], nvme_mi_req[4][0], nvme_mi_req[5][0], nvme_mi_req[6][0], nvme_mi_req[7][0], nvme_mi_req[8][0], nvme_mi_req[9][0]),'bits (12 - 0) %d %d %d %d %d %d %d %d %d %d %d %d %d' % (nvme_mi_req[10][1], nvme_mi_req[11][1], nvme_mi_req[12][1], nvme_mi_req[13][1], nvme_mi_req[14][1], nvme_mi_req[2][1], nvme_mi_req[3][1], nvme_mi_req[4][1], nvme_mi_req[5][1], nvme_mi_req[6][1], nvme_mi_req[7][1], nvme_mi_req[8][1], nvme_mi_req[9][1]),'DW1']]]
             elif nvme_mi_req[1][1] == 0x03:
-                self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-                ['%s: %02X | %s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1], nvme_mi_req[2][2], nvme_mi_req[2][1]), 
-                '%s: %02X | %s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1], nvme_mi_req[2][0], nvme_mi_req[2][1]), 
-                '%s | %s' % (nvme_mi_req[1][0], nvme_mi_req[2][0]), 
-                'DW0']])
-
-                self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [4, 
-                ['%s: %04X' % (nvme_mi_req[3][2], nvme_mi_req[3][1]), 
-                '%s: %04X' % (nvme_mi_req[3][0], nvme_mi_req[3][1]),
-                '%s' % nvme_mi_req[3][0], 
-                'DW1']])
+                NvmeMiReq[3] = [16, 4, [4, ['%s: %02X | %s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1], nvme_mi_req[2][2], nvme_mi_req[2][1]), '%s: %02X | %s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1], nvme_mi_req[2][0], nvme_mi_req[2][1]), '%s | %s' % (nvme_mi_req[1][0], nvme_mi_req[2][0]), 'DW0']]]
+                NvmeMiReq[5] = [20, 4, [4, ['%s: %04X' % (nvme_mi_req[3][2], nvme_mi_req[3][1]), '%s: %04X' % (nvme_mi_req[3][0], nvme_mi_req[3][1]),'%s' % nvme_mi_req[3][0], 'DW1']]]
             elif nvme_mi_req[1][1] == 0x04:
-                self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-                ['%s: %02X | Async Event ► %s: %02X → %s: %02X → %s: %r → %s: %r → %s: %r' % (nvme_mi_req[1][2], nvme_mi_req[1][1], nvme_mi_req[2][2], nvme_mi_req[2][1], nvme_mi_req[3][2], nvme_mi_req[3][1], nvme_mi_req[4][2], nvme_mi_req[4][1], nvme_mi_req[5][2], nvme_mi_req[5][1], nvme_mi_req[6][2], nvme_mi_req[6][1]), 
-                '%s: %02X | %s: %02X → %s: %02X → %s: %r → %s: %r → %s: %r' % (nvme_mi_req[1][0], nvme_mi_req[1][1], nvme_mi_req[2][0], nvme_mi_req[2][1], nvme_mi_req[3][0], nvme_mi_req[3][1], nvme_mi_req[4][0], nvme_mi_req[4][1], nvme_mi_req[5][0], nvme_mi_req[5][1], nvme_mi_req[6][0], nvme_mi_req[6][1]), 
-                '%s | %s → %s → %s → %s → %s' % (nvme_mi_req[1][0], nvme_mi_req[2][0], nvme_mi_req[3][0], nvme_mi_req[4][0], nvme_mi_req[5][0], nvme_mi_req[6][0]), 
-                'DW0']])
-                
-                self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [4, 
-                ['Reserved: 00 00 00 00', 
-                'RSVD: 00 00 00 00', 
-                '00 00 00 00', 
-                'DW1']])
+                NvmeMiReq[3] = [16, 4, [4, ['%s: %02X | Async Event ► %s: %02X → %s: %02X → %s: %r → %s: %r → %s: %r' % (nvme_mi_req[1][2], nvme_mi_req[1][1], nvme_mi_req[2][2], nvme_mi_req[2][1], nvme_mi_req[3][2], nvme_mi_req[3][1], nvme_mi_req[4][2], nvme_mi_req[4][1], nvme_mi_req[5][2], nvme_mi_req[5][1], nvme_mi_req[6][2], nvme_mi_req[6][1]), '%s: %02X | %s: %02X → %s: %02X → %s: %r → %s: %r → %s: %r' % (nvme_mi_req[1][0], nvme_mi_req[1][1], nvme_mi_req[2][0], nvme_mi_req[2][1], nvme_mi_req[3][0], nvme_mi_req[3][1], nvme_mi_req[4][0], nvme_mi_req[4][1], nvme_mi_req[5][0], nvme_mi_req[5][1], nvme_mi_req[6][0], nvme_mi_req[6][1]), '%s | %s → %s → %s → %s → %s' % (nvme_mi_req[1][0], nvme_mi_req[2][0], nvme_mi_req[3][0], nvme_mi_req[4][0], nvme_mi_req[5][0], nvme_mi_req[6][0]), 'DW0']]]
+                NvmeMiReq[5] = [20, 4, [4, ['Reserved: 00 00 00 00', 'RSVD: 00 00 00 00', '00 00 00 00', 'DW1']]]
                 if len(Data) > 17:
                     # Request Data                
-                    self.put(self.packets[24][0], self.packets[27][1], self.out_ann, [14, ['AE Enable List Header', 'AE List', 'AE']])
-                    self.put(self.packets[24][0], self.packets[27][1], self.out_ann, [4, 
-                    ['%s: %02X | %s: %02X | %s: %04X' % (nvme_mi_req[7][2], nvme_mi_req[7][1], nvme_mi_req[8][2], nvme_mi_req[8][1], nvme_mi_req[9][2], nvme_mi_req[9][1]), 
-                    '%s: %02X | %s: %02X | %s: %04X' % (nvme_mi_req[7][0], nvme_mi_req[7][1], nvme_mi_req[8][0], nvme_mi_req[8][1], nvme_mi_req[9][0], nvme_mi_req[9][1]), 
-                    '%s | %s | %s' % (nvme_mi_req[7][0], nvme_mi_req[8][0], nvme_mi_req[9][0]), 
-                    'AE']])
-                    self.put(self.packets[28][0], self.packets[28][1], self.out_ann, [14, ['AE Enable List Header', 'AE List', 'AE']])
-                    self.put(self.packets[28][0], self.packets[28][1], self.out_ann, [4, 
-                    ['%s: %02X' % (nvme_mi_req[10][2], nvme_mi_req[10][1]), 
-                    '%s: %02X' % (nvme_mi_req[10][0], nvme_mi_req[10][1]), 
-                    '%s' % (nvme_mi_req[10][0]), 
-                    'AE']])
-                
+                    NvmeMiReq[6] = [24, 5, [14, ['AE Enable List Header', 'AE List', 'AE']]]
+                    NvmeMiReq[7] = [24, 5, [4, ['%s: %02X | %s: %02X | %s: %04X | %s: %02X' % (nvme_mi_req[7][2], nvme_mi_req[7][1], nvme_mi_req[8][2], nvme_mi_req[8][1], nvme_mi_req[9][2], nvme_mi_req[9][1], nvme_mi_req[10][2], nvme_mi_req[10][1]), '%s: %02X | %s: %02X | %s: %04X | %s: %02X' % (nvme_mi_req[7][0], nvme_mi_req[7][1], nvme_mi_req[8][0], nvme_mi_req[8][1], nvme_mi_req[9][0], nvme_mi_req[9][1], nvme_mi_req[10][0], nvme_mi_req[10][1]), '%s | %s | %s | %s' % (nvme_mi_req[7][0], nvme_mi_req[8][0], nvme_mi_req[9][0], nvme_mi_req[10][0]), 'AE']]]                
                     j = 29
                     k = 11
+                    m = 8
                     for i in range(0, nvme_mi_req[7][1]):
-                        self.put(self.packets[j][0], self.packets[j+2][1], self.out_ann, [14, ['AE Enable Data Structure %d' % i, 'AE Ena DS %d' % i, 'AE%d' % i]])
-                        self.put(self.packets[j][0], self.packets[j+2][1], self.out_ann, [4, 
-                        ['%s ► %s: %02X → %s: %02X → %s: %r' % (nvme_mi_req[k][2], nvme_mi_req[k + 1][2], nvme_mi_req[k + 1][1], nvme_mi_req[k + 2][2], nvme_mi_req[k + 2][1], nvme_mi_req[k + 3][2], nvme_mi_req[k + 3][1]), 
-                        '%s ► %s: %02X → %s: %02X → %s: %r' % (nvme_mi_req[k][0], nvme_mi_req[k + 1][0], nvme_mi_req[k + 1][1], nvme_mi_req[k + 2][0], nvme_mi_req[k + 2][1], nvme_mi_req[k + 3][0], nvme_mi_req[k + 3][1]), 
-                        '%s ► %s → %s → %s' % (nvme_mi_req[k][0], nvme_mi_req[k + 1][0], nvme_mi_req[k + 2][0], nvme_mi_req[k + 3][0]), 
-                        'DS']])
+                        NvmeMiReq[m] = [j, 3, [14, ['AE Enable Data Structure %d' % i, 'AE Ena DS %d' % i, 'AE%d' % i]]]
+                        NvmeMiReq[m + 2] = [j, 3, [4, ['%s ► %s: %02X → %s: %02X → %s: %r' % (nvme_mi_req[k][2], nvme_mi_req[k + 1][2], nvme_mi_req[k + 1][1], nvme_mi_req[k + 2][2], nvme_mi_req[k + 2][1], nvme_mi_req[k + 3][2], nvme_mi_req[k + 3][1]), '%s ► %s: %02X → %s: %02X → %s: %r' % (nvme_mi_req[k][0], nvme_mi_req[k + 1][0], nvme_mi_req[k + 1][1], nvme_mi_req[k + 2][0], nvme_mi_req[k + 2][1], nvme_mi_req[k + 3][0], nvme_mi_req[k + 3][1]), '%s ► %s → %s → %s' % (nvme_mi_req[k][0], nvme_mi_req[k + 1][0], nvme_mi_req[k + 2][0], nvme_mi_req[k + 3][0]), 'DS']]]
                         j += 3
                         k += 4
     # "Configuration Get",
-        elif nvme_mi_req[0][1] == 0x04:
+        elif self.LastOpcode == 0x04:
             self.LastCID = nvme_mi_req[1][1]
             if nvme_mi_req[1][1] == 0x01 or nvme_mi_req[1][1] == 0x03:
-                self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-                ['%s: %02X | %s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1], nvme_mi_req[2][2], nvme_mi_req[2][1]), 
-                '%s: %02X | %s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1], nvme_mi_req[2][0], nvme_mi_req[2][1]), 
-                '%s | %s' %(nvme_mi_req[1][0], nvme_mi_req[2][0]), 
-                'DW0']])
+                NvmeMiReq[3] = [16, 4, [4, ['%s: %02X | %s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1], nvme_mi_req[2][2], nvme_mi_req[2][1]), '%s: %02X | %s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1], nvme_mi_req[2][0], nvme_mi_req[2][1]), '%s | %s' %(nvme_mi_req[1][0], nvme_mi_req[2][0]), 'DW0']]]
             else:
-                self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-                ['%s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), 
-                '%s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),
-                '%s' % nvme_mi_req[1][0], 
-                'DW0']])
-            self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [4, 
-            ['Reserved: 00 00 00 00', 
-            'RSVD: 00 00 00 00', 
-            '00 00 00 00', 
-            'DW1']])
+                NvmeMiReq[3] = [16, 4, [4, ['%s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), '%s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),'%s' % nvme_mi_req[1][0], 'DW0']]]
+            NvmeMiReq[5] = [20, 4, [4, ['Reserved: 00 00 00 00', 'RSVD: 00 00 00 00', '00 00 00 00', 'DW1']]]
     # "VPD Read",
-        elif nvme_mi_req[0][1] == 0x05:
-            self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-            ['%s: %04X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), 
-            '%s: %04X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),
-            '%s' % nvme_mi_req[1][0], 
-            'DW0']])
-            
-            self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [4, 
-            ['%s: %04X' % (nvme_mi_req[2][2], nvme_mi_req[2][1]), 
-            '%s: %04X' % (nvme_mi_req[2][0], nvme_mi_req[2][1]),
-            '%s' % nvme_mi_req[2][0], 
-            'DW1']])
+        elif self.LastOpcode == 0x05:
+            NvmeMiReq[3] = [16, 4, [4, ['%s: %04X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), '%s: %04X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),'%s' % nvme_mi_req[1][0], 'DW0']]]
+            NvmeMiReq[5] = [20, 4, [4, ['%s: %04X' % (nvme_mi_req[2][2], nvme_mi_req[2][1]), '%s: %04X' % (nvme_mi_req[2][0], nvme_mi_req[2][1]),'%s' % nvme_mi_req[2][0], 'DW1']]]
     # "VPD Write",
-        elif nvme_mi_req[0][1] == 0x06:
-            self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-            ['%s: %04X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), 
-            '%s: %04X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),
-            '%s' % nvme_mi_req[1][0], 
-            'DW0']])
-            
-            self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [4, 
-            ['%s: %04X' % (nvme_mi_req[2][2], nvme_mi_req[2][1]), 
-            '%s: %04X' % (nvme_mi_req[2][0], nvme_mi_req[2][1]),
-            '%s' % nvme_mi_req[2][0], 
-            'DW1']])
-            
-            self.put(self.packets[24][0], self.packets[-6][1], self.out_ann, [14, ['Request Data', 'Req Data', 'RQ']])
-            self.put(self.packets[24][0], self.packets[-6][1], self.out_ann, [4, 
-            ['%s: %X' % (nvme_mi_req[3][2], nvme_mi_req[3][1]), 
-            '%s: %X' % (nvme_mi_req[3][0], nvme_mi_req[3][1]), 
-            '%s' % nvme_mi_req[3][0], 
-            'RD']])
+        elif self.LastOpcode == 0x06:
+            NvmeMiReq[3] = [16, 4, [4, ['%s: %04X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), '%s: %04X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),'%s' % nvme_mi_req[1][0], 'DW0']]]
+            NvmeMiReq[5] = [20, 4, [4, ['%s: %04X' % (nvme_mi_req[2][2], nvme_mi_req[2][1]), '%s: %04X' % (nvme_mi_req[2][0], nvme_mi_req[2][1]),'%s' % nvme_mi_req[2][0], 'DW1']]]
+            NvmeMiReq[6] = [24, 255, [14, ['Request Data', 'Req Data', 'RQ']]]
+            NvmeMiReq[7] = [24, 255, [4, ['%s: %X' % (nvme_mi_req[3][2], nvme_mi_req[3][1]), '%s: %X' % (nvme_mi_req[3][0], nvme_mi_req[3][1]), '%s' % nvme_mi_req[3][0], 'RD']]]
     # "Reset",
-        elif nvme_mi_req[0][1] == 0x07:
-            self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-            ['%s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), 
-            '%s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),
-            '%s' % nvme_mi_req[1][0], 
-            'DW0']])
-            
-            self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [4, 
-            ['Reserved: 00 00 00 00', 
-            'RSVD: 00 00 00 00', 
-            'RSVD', 
-            'DW1']])
+        elif self.LastOpcode == 0x07:
+            NvmeMiReq[3] = [16, 4, [4, ['%s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), '%s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),'%s' % nvme_mi_req[1][0], 'DW0']]]
+            NvmeMiReq[5] = [20, 4, [4, ['Reserved: 00 00 00 00', 'RSVD: 00 00 00 00', 'RSVD', 'DW1']]]
     # "SES Receive",
-        elif nvme_mi_req[0][1] == 0x08:
-            self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-            ['%s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), 
-            '%s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),
-            '%s' % nvme_mi_req[1][0], 
-            'DW0']])
-            
-            self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [4, 
-            ['%s: %04X' % (nvme_mi_req[2][2], nvme_mi_req[2][1]), 
-            '%s: %04X' % (nvme_mi_req[2][0], nvme_mi_req[2][1]),
-            '%s' % nvme_mi_req[2][0], 
-            'DW1']])
+        elif self.LastOpcode == 0x08:
+            NvmeMiReq[3] = [16, 4, [4, ['%s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), '%s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),'%s' % nvme_mi_req[1][0], 'DW0']]]
+            NvmeMiReq[5] = [20, 4, [4, ['%s: %04X' % (nvme_mi_req[2][2], nvme_mi_req[2][1]), '%s: %04X' % (nvme_mi_req[2][0], nvme_mi_req[2][1]),'%s' % nvme_mi_req[2][0], 'DW1']]]
     # "SES Send",
-        elif nvme_mi_req[0][1] == 0x09:
-            self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-            ['Reserved: 00 00 00 00', 
-            'RSVD: 00 00 00 00', 
-            'RSVD', 
-            'DW0']])
-            
-            self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [4, 
-            ['%s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), 
-            '%s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),
-            '%s' % nvme_mi_req[1][0], 
-            'DW1']])
-            
-            self.put(self.packets[24][0], self.packets[-6][1], self.out_ann, [14, ['Request Data', 'Req Data', 'RQ']])
-            self.put(self.packets[24][0], self.packets[-6][1], self.out_ann, [4, 
-            ['%s: %X' % (nvme_mi_req[2][2], nvme_mi_req[2][1]), 
-            '%s: %X' % (nvme_mi_req[2][0], nvme_mi_req[2][1]),
-            '%s' % nvme_mi_req[2][0], 
-            'RQ']])
+        elif self.LastOpcode == 0x09:
+            NvmeMiReq[3] = [16, 4, [4, ['Reserved: 00 00 00 00', 'RSVD: 00 00 00 00', 'RSVD', 'DW0']]]
+            NvmeMiReq[5] = [20, 4, [4, ['%s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), '%s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),'%s' % nvme_mi_req[1][0], 'DW1']]]
+            NvmeMiReq[6] = [24, 255, [14, ['Request Data', 'Req Data', 'RQ']]]
+            NvmeMiReq[7] = [24, 255, [4, ['%s: %X' % (nvme_mi_req[2][2], nvme_mi_req[2][1]), '%s: %X' % (nvme_mi_req[2][0], nvme_mi_req[2][1]),'%s' % nvme_mi_req[2][0], 'RQ']]]
     # "MEB Read",
-        elif nvme_mi_req[0][1] == 0x0A:
-            self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-            ['%s: %08X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), 
-            '%s: %08X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),
-            '%s' % nvme_mi_req[1][0], 
-            'DW0']])
-            
-            self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [4, 
-            ['%s: %04X' % (nvme_mi_req[2][2], nvme_mi_req[2][1]), 
-            '%s: %04X' % (nvme_mi_req[2][0], nvme_mi_req[2][1]),
-            '%s' % nvme_mi_req[2][0], 
-            'DW1']])
+        elif self.LastOpcode == 0x0A:
+            NvmeMiReq[3] = [16, 4, [4, ['%s: %08X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), '%s: %08X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),'%s' % nvme_mi_req[1][0], 'DW0']]]
+            NvmeMiReq[5] = [20, 4, [4, ['%s: %04X' % (nvme_mi_req[2][2], nvme_mi_req[2][1]), '%s: %04X' % (nvme_mi_req[2][0], nvme_mi_req[2][1]),'%s' % nvme_mi_req[2][0], 'DW1']]]
     # "MEB Write",
-        elif nvme_mi_req[0][1] == 0x0B:  
-            self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-            ['%s: %08X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), 
-            '%s: %08X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),
-            '%s' % nvme_mi_req[1][0], 
-            'DW0']])
-            
-            self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [4, 
-            ['%s: %04X' % (nvme_mi_req[2][2], nvme_mi_req[2][1]), 
-            '%s: %04X' % (nvme_mi_req[2][0], nvme_mi_req[2][1]),
-            '%s' % nvme_mi_req[2][0], 
-            'DW1']])
-
-            self.put(self.packets[24][0], self.packets[-6][1], self.out_ann, [14, ['Request Data', 'Req Data', 'RQ']])
-            self.put(self.packets[24][0], self.packets[-6][1], self.out_ann, [4, 
-            ['%s: %X' % (nvme_mi_req[3][2], nvme_mi_req[3][1]), 
-            '%s: %X' % (nvme_mi_req[3][0], nvme_mi_req[3][1]), 
-            '%s' % nvme_mi_req[3][0], 
-            'RD']])
+        elif self.LastOpcode == 0x0B:  
+            NvmeMiReq[3] = [16, 4, [4, ['%s: %08X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), '%s: %08X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),'%s' % nvme_mi_req[1][0], 'DW0']]]
+            NvmeMiReq[5] = [20, 4, [4, ['%s: %04X' % (nvme_mi_req[2][2], nvme_mi_req[2][1]), '%s: %04X' % (nvme_mi_req[2][0], nvme_mi_req[2][1]),'%s' % nvme_mi_req[2][0], 'DW1']]]
+            NvmeMiReq[6] = [24, 255, [14, ['Request Data', 'Req Data', 'RQ']]]
+            NvmeMiReq[7] = [24, 255, [4, ['%s: %X' % (nvme_mi_req[3][2], nvme_mi_req[3][1]), '%s: %X' % (nvme_mi_req[3][0], nvme_mi_req[3][1]), '%s' % nvme_mi_req[3][0], 'RD']]]
     # "Shutdown",
-        elif nvme_mi_req[0][1] == 0x0C:
-            self.put(self.packets[16][0], self.packets[19][1], self.out_ann, [4, 
-            ['%s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), 
-            '%s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),
-            '%s' % nvme_mi_req[1][0], 
-            'DW0']])
-            
-            self.put(self.packets[20][0], self.packets[23][1], self.out_ann, [4, 
-            ['Reserved: 00 00 00 00', 
-            'RSVD: 00 00 00 00', 
-            'RSVD', 
-            'DW1']])
+        elif self.LastOpcode == 0x0C:
+            NvmeMiReq[3] = [16, 4, [4, ['%s: %02X' % (nvme_mi_req[1][2], nvme_mi_req[1][1]), '%s: %02X' % (nvme_mi_req[1][0], nvme_mi_req[1][1]),'%s' % nvme_mi_req[1][0], 'DW0']]]
+            NvmeMiReq[5] = [20, 4, [4, ['Reserved: 00 00 00 00', 'RSVD: 00 00 00 00', 'RSVD', 'DW1']]]
     #  "Vendor Specific"
-        elif nvme_mi_req[0][1] > 0x0C:
+        elif self.LastOpcode > 0x0C:
             # DWORD 0 (Bytes: 16 - 19)
             # DWORD 1 (Bytes: 20 - 23)
             return
+
+        Cnt = firstPacket
+        for Idx, value in list(NvmeMiReq.items())[::2]:
+            if NvmeMiReq[Idx][0] >= (Offset + firstPacket) or NvmeMiReq[Idx][1] > Offset :
+                if (Cnt + NvmeMiReq[Idx][1]) < (firstPacket + len(data)):
+                    self.put(self.packets[Cnt][0], self.packets[Cnt + NvmeMiReq[Idx][1] - 1][1], self.out_ann, NvmeMiReq[Idx][2])
+                    self.put(self.packets[Cnt][0], self.packets[Cnt + NvmeMiReq[Idx][1] - 1][1], self.out_ann, NvmeMiReq[Idx + 1][2])
+                    Cnt += NvmeMiReq[Idx][1]
+                else:
+                    self.put(self.packets[Cnt][0], self.packets[firstPacket + len(data) - 1][1], self.out_ann, NvmeMiReq[Idx][2])
+                    self.put(self.packets[Cnt][0], self.packets[firstPacket + len(data) - 1][1], self.out_ann, NvmeMiReq[Idx + 1][2])
+                    Cnt += len(data)
         
     def handle_req_nvme_admin_parser(self, data, Offset, Len):
         admin_req = {
@@ -1623,10 +1454,10 @@ class Decoder(srd.Decoder):
             self.put(self.packets[i][0], self.packets[firstPacket + len(data) - 1][1], self.out_ann, AdminDataPrint[j])
             self.put(self.packets[i][0], self.packets[firstPacket + len(data) - 1][1], self.out_ann, AdminDataPrint[j + 1])
 
-    def handle_request_pcie_command(self):
+    def handle_request_pcie_command(self, data, firstPacket, Offset):
         return
         
-    def handle_request_asynchronous_event(self):
+    def handle_request_asynchronous_event(self, data, firstPacket, Offset):
         return
 
 # ------------- Response Messages
@@ -1938,13 +1769,12 @@ class Decoder(srd.Decoder):
         elif self.LastOpcode == 0x05:
             # Response Data
             nvme_mi_resp[1] = ["VD",                        0,                                                              "VPD Data"]
-            def Eva(self):
-                if self.SOM == 0:
-                    for i in data[Offset: Offset + Len]:
-                        nvme_mi_resp[1][1] = i | (nvme_mi_resp[1][1] << 8)
-                else:
-                    for i in data[16: Len]:
-                        nvme_mi_resp[1][1] = i | (nvme_mi_resp[1][1] << 8)
+            if self.SOM == 0:
+                for i in data[Offset: Offset + Len]:
+                    nvme_mi_resp[1][1] = i | (nvme_mi_resp[1][1] << 8)
+            else:
+                for i in data[16: Len]:
+                    nvme_mi_resp[1][1] = i | (nvme_mi_resp[1][1] << 8)
     # "SES Receive",
         elif self.LastOpcode == 0x08:
             # NVMe Managment Response
@@ -2446,20 +2276,6 @@ class Decoder(srd.Decoder):
     def handle_response_asynchronous_event(self, data, firstPacket, Offset):
         return
 
-    def handle_Message_Integrity_Check(self):
-        self.put(self.packets[-5][0], self.packets[-2][1], self.out_ann, [7, ['Message Intigrity Check', 'Mes Int Check', 'MIC']])
-        MIC = self.packets[-5][3] | (self.packets[-4][3] << 8) | (self.packets[-3][3] << 16) | (self.packets[-2][3] << 24)
-        self.put(self.packets[-5][0], self.packets[-2][1], self.out_ann, [4, 
-        ['Messages Integrity Check ▸ %08X' % MIC,                  'MIC: %08X' % MIC, 
-        '%08X' % MIC,                               'MIC']])
-
-    def handle_PEC(self):
-        self.put(self.packets[-1][0], self.packets[-1][1], self.out_ann, [7, ['Packet Error Checking', 'Pck Error Check', 'PEC']])
-        PEC = self.packets[-1][3]
-        self.put(self.packets[-1][0], self.packets[-1][1], self.out_ann, [4, 
-        ['Packet Error Checking ▸ %02X' % PEC,                  'PEC: %02X' % PEC, 
-        '%02X' % PEC,                               'PEC']])
-
     def put_payload_bytes(self):
         # NVMe MI Req 0x1D -> 0x3A
         if self.packets[0][3] == 0x3A and self.error == 0:
@@ -2529,7 +2345,9 @@ class Decoder(srd.Decoder):
         # VPD Res 0x53 -> 0xA7
         if self.packets[0][3] == 0xA7 and self.error == 1:
             self.handle_response_VPD()       
-    
+
+# ------------- VPD Message
+
     def handle_request_VPD(self):
         SMBusAddr = self.packets[0][3]
         Offset = self.packets[1][3]
@@ -3251,6 +3069,8 @@ class Decoder(srd.Decoder):
                         
                 Offset += LEN
 
+# ------------- Basic Command Code Messages
+
     def handle_request_BMC(self):
         SMBusAddr = self.packets[0][3]
         CmdCode = self.packets[1][3]
@@ -3365,6 +3185,8 @@ class Decoder(srd.Decoder):
             "%s" % cc_response[21][0]]])
             
         self.put(self.packets[3][0], self.packets[EndByte + 3][1], self.out_ann, [14, ['Command Code Data', 'Data', 'CCD']])        
+
+
 
     def handle_address_or_data(self, pins):
         scl, sda = pins
