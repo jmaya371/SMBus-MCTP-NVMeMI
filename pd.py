@@ -92,6 +92,7 @@ class Decoder(srd.Decoder):
         self.LastDytp = 0
         self.LastOpcode = 0
         self.SOM = 1
+        self.CmdCode = 0
         self.reset()
 
     def reset(self):
@@ -1447,6 +1448,7 @@ class Decoder(srd.Decoder):
     def handle_request_BMC(self):
         SMBusAddr = self.packets[0][3]
         CmdCode = self.packets[1][3]
+        self.CmdCode = CmdCode
         self.put(self.packets[0][0], self.packets[1][1], self.out_ann, [3, 
         ['SMBusAddr: %02X | Command Code: %02X' % (SMBusAddr, CmdCode), 
         '%02X | %02X' % (SMBusAddr, CmdCode), 
@@ -1457,30 +1459,34 @@ class Decoder(srd.Decoder):
     def handle_response_BMC_CC(self):
         CC_Ofst = 3
         SMBusAddr   = self.packets[0][3]
-        CmdCode     = self.packets[1][3]
-        SMBusAddrR  = self.packets[2][3]
-        self.put(self.packets[0][0], self.packets[2][1], self.out_ann, [12, ['Command Code', 'CC', 'CC']])        
-        self.put(self.packets[0][0], self.packets[2][1], self.out_ann, [3, 
-        ['SMBusAddr: %02X | Command Code: %02X | SMBusAddrR: %02X' % (SMBusAddr, CmdCode, SMBusAddrR), 
-        '%02X | %02X | %02X' % (SMBusAddr, CmdCode, SMBusAddrR), 
-        'SMBusAddr | CmdCode | SMBusAddrR', 
-        'CC']])
-        
-        Data = [self.packets[j][3] for j in range(12, len(self.packets))]
-        cc_response = handle_resp_bmc_cc_parser(Data)
+        CmdCode     = self.CmdCode
 
-        CmdCode = 0x0
+        self.put(self.packets[0][0], self.packets[0][1], self.out_ann, [12, ['Command Code', 'CC', 'CC']])        
+        self.put(self.packets[0][0], self.packets[0][1], self.out_ann, [3, 
+        ['SMBusAddr: %02X | Command Code: %X' % (SMBusAddr, CmdCode), 
+        '%02X | %02X' % (SMBusAddr, CmdCode), 
+        'SMBusAddr | CmdCode', 
+        'CC']])
+        Data = [self.packets[j][3] for j in range(1, (len(self.packets)))]
+        Offset = 0 if CmdCode < 0x08 else 8 if CmdCode < 0x20 else 32 if CmdCode < 0xFE else 0
+        Payload = []
+        Payload = [0 for i in range(0, Offset)] + Data
+        Payload.extend([0 for i in range(0, 255)])
+        
+        cc_response = handle_resp_bmc_cc_parser(Payload)
+
+        #CmdCode = 0x0
         # TBD, What happen if the CC in request is not 0, 8 or 32 / if the CC returns like ofset, change the matrix DicTblfields columns
         if CmdCode < 0x08: 
-            EndByte = 10
-            self.put(self.packets[3][0], self.packets[EndByte + 3][1], self.out_ann, [4, 
+            EndByte = 8
+            self.put(self.packets[1][0], self.packets[EndByte][1], self.out_ann, [4, 
             ["%s: %02X | %s ► %s: %r → %s: %r → %s: %r → %s: %r → %s: %r → %s: %r → %s: %d" %
             (cc_response[0][2], cc_response[0][1], cc_response[1][2], cc_response[1][1], cc_response[2][2], cc_response[2][1], cc_response[3][2], cc_response[3][1], cc_response[4][2], cc_response[4][1], cc_response[5][2], cc_response[5][1], cc_response[6][2], cc_response[6][1], cc_response[7][2], cc_response[7][1], cc_response[8][2], cc_response[8][1]),
             "%s: %02X | %s ► %s: %r → %s: %r → %s: %r → %s: %r → %s: %r → %s: %r → %s: %d" %
             (cc_response[0][0], cc_response[0][1], cc_response[1][0], cc_response[1][1], cc_response[2][0], cc_response[2][1], cc_response[3][0], cc_response[3][1], cc_response[4][0], cc_response[4][1], cc_response[5][0], cc_response[5][1], cc_response[6][0], cc_response[6][1], cc_response[7][0], cc_response[7][1], cc_response[8][0], cc_response[8][1]),
             "%s | %s ► %s → %s → %s → %s → %s → %s → %s" % (cc_response[0][0], cc_response[1][0], cc_response[2][0], cc_response[3][0], cc_response[4][0], cc_response[5][0], cc_response[6][0], cc_response[7][0], cc_response[8][0])]])
 
-            self.put(self.packets[3][0], self.packets[EndByte + 3][1], self.out_ann, [4, 
+            self.put(self.packets[1][0], self.packets[EndByte][1], self.out_ann, [4, 
             ["%s: %02X | %s: %02X | %s: %02X | %s: %02X | %s ► %s: %r → %s: %02X | %s: %02X" %
             (cc_response[9][2], cc_response[9][1], cc_response[10][2], cc_response[10][1], cc_response[11][2], cc_response[11][1], cc_response[12][2], cc_response[12][1], cc_response[13][2], cc_response[13][1], cc_response[14][2], cc_response[14][1], cc_response[15][2], cc_response[15][1], cc_response[16][2], cc_response[16][1]),
             "%s: %02X | %s: %02X | %s: %02X | %s: %02X | %s ► %s: %r → %s: %02X | %s: %02X" %
@@ -1488,39 +1494,38 @@ class Decoder(srd.Decoder):
             "%s | %s | %s | %s | %s ► %s → %s | %s" % (cc_response[9][0], cc_response[10][0], cc_response[11][0], cc_response[12][0], cc_response[13][0], cc_response[14][0], cc_response[15][0], cc_response[16][0])]])
         elif CmdCode < 0x20:
             EndByte = 24
-            self.put(self.packets[3][0], self.packets[EndByte + 3][1], self.out_ann, [4, 
-            ["%s: %02X | %s: %04X | %s: %X | %s: %02X" % (cc_response[17][2], cc_response[17][1], cc_response[18][2], cc_response[18][1], cc_response[19][2], cc_response[19][1], cc_response[20][2], cc_response[20][1]),
-            "%s: %02X | %s: %04X | %s: %X | %s: %02X" % (cc_response[17][0], cc_response[17][1], cc_response[18][0], cc_response[18][1], cc_response[19][0], cc_response[19][1], cc_response[20][0], cc_response[20][1]),
+            self.put(self.packets[1][0], self.packets[EndByte][1], self.out_ann, [4, 
+            ["%s: %02X | %s: %04X | %s: %s | %s: %02X" % (cc_response[17][2], cc_response[17][1], cc_response[18][2], cc_response[18][1], cc_response[19][2], cc_response[19][1], cc_response[20][2], cc_response[20][1]),
+            "%s: %02X | %s: %04X | %s: %s | %s: %02X" % (cc_response[17][0], cc_response[17][1], cc_response[18][0], cc_response[18][1], cc_response[19][0], cc_response[19][1], cc_response[20][0], cc_response[20][1]),
             "%s | %s | %s | %s" % (cc_response[17][0], cc_response[18][0], cc_response[19][0], cc_response[20][0])]])
+        elif CmdCode < 0xFF:
+            EndByte = 223
+            self.put(self.packets[1][0], self.packets[EndByte][1], self.out_ann, [4, 
+            ["%s: %X" % (cc_response[21][2], cc_response[21][1]),
+            "%s: %X" % (cc_response[21][0], cc_response[21][1]),
+            "%s" % cc_response[21][0]]])
         elif CmdCode == 0xFF:
             EndByte = 32
-            self.put(self.packets[3][0], self.packets[EndByte + 3][1], self.out_ann, [4, 
+            self.put(self.packets[1][0], self.packets[EndByte][1], self.out_ann, [4, 
             ["%s: %02X | %s ► %s: %r → %s: %r → %s: %r → %s: %r → %s: %r → %s: %r → %s: %d" %
             (cc_response[0][2], cc_response[0][1], cc_response[1][2], cc_response[1][1], cc_response[2][2], cc_response[2][1], cc_response[3][2], cc_response[3][1], cc_response[4][2], cc_response[4][1], cc_response[5][2], cc_response[5][1], cc_response[6][2], cc_response[6][1], cc_response[7][2], cc_response[7][1], cc_response[8][2], cc_response[8][1]),
             "%s: %02X | %s ► %s: %r → %s: %r → %s: %r → %s: %r → %s: %r → %s: %r → %s: %d" %
             (cc_response[0][0], cc_response[0][1], cc_response[1][0], cc_response[1][1], cc_response[2][0], cc_response[2][1], cc_response[3][0], cc_response[3][1], cc_response[4][0], cc_response[4][1], cc_response[5][0], cc_response[5][1], cc_response[6][0], cc_response[6][1], cc_response[7][0], cc_response[7][1], cc_response[8][0], cc_response[8][1]),
             "%s | %s ► %s → %s → %s → %s → %s → %s → %s" % (cc_response[0][0], cc_response[1][0], cc_response[2][0], cc_response[3][0], cc_response[4][0], cc_response[5][0], cc_response[6][0], cc_response[7][0], cc_response[8][0])]])
 
-            self.put(self.packets[3][0], self.packets[EndByte + 3][1], self.out_ann, [4, 
+            self.put(self.packets[1][0], self.packets[EndByte][1], self.out_ann, [4, 
             ["%s: %02X | %s: %02X | %s: %02X | %s: %02X | %s ► %s: %r → %s: %02X | %s: %02X" %
             (cc_response[9][2], cc_response[9][1], cc_response[10][2], cc_response[10][1], cc_response[11][2], cc_response[11][1], cc_response[12][2], cc_response[12][1], cc_response[13][2], cc_response[13][1], cc_response[14][2], cc_response[14][1], cc_response[15][2], cc_response[15][1], cc_response[16][2], cc_response[16][1]),
             "%s: %02X | %s: %02X | %s: %02X | %s: %02X | %s ► %s: %r → %s: %02X | %s: %02X" %
             (cc_response[9][0], cc_response[9][1], cc_response[10][0], cc_response[10][1], cc_response[11][0], cc_response[11][1], cc_response[12][0], cc_response[12][1], cc_response[13][0], cc_response[13][1], cc_response[14][0], cc_response[14][1], cc_response[15][0], cc_response[15][1], cc_response[16][0], cc_response[16][1]),
             "%s | %s | %s | %s | %s ► %s → %s | %s" % (cc_response[9][0], cc_response[10][0], cc_response[11][0], cc_response[12][0], cc_response[13][0], cc_response[14][0], cc_response[15][0], cc_response[16][0])]])
 
-            self.put(self.packets[3][0], self.packets[EndByte + 3][1], self.out_ann, [4, 
+            self.put(self.packets[1][0], self.packets[EndByte][1], self.out_ann, [4, 
             ["%s: %02X | %s: %04X | %s: %X | %s: %02X" % (cc_response[17][2], cc_response[17][1], cc_response[18][2], cc_response[18][1], cc_response[19][2], cc_response[19][1], cc_response[20][2], cc_response[20][1]),
             "%s: %02X | %s: %04X | %s: %X | %s: %02X" % (cc_response[17][0], cc_response[17][1], cc_response[18][0], cc_response[18][1], cc_response[19][0], cc_response[19][1], cc_response[20][0], cc_response[20][1]),
             "%s | %s | %s | %s" % (cc_response[17][0], cc_response[18][0], cc_response[19][0], cc_response[20][0])]])
-
-        elif CmdCode > 0x1F:
-            EndByte = 223
-            self.put(self.packets[3][0], self.packets[EndByte + 3][1], self.out_ann, [4, 
-            ["%s: %X" % (cc_response[21][2], cc_response[21][1]),
-            "%s: %X" % (cc_response[21][0], cc_response[21][1]),
-            "%s" % cc_response[21][0]]])
             
-        self.put(self.packets[3][0], self.packets[EndByte + 3][1], self.out_ann, [14, ['Command Code Data', 'Data', 'CCD']])        
+        self.put(self.packets[1][0], self.packets[EndByte][1], self.out_ann, [14, ['Command Code Data', 'Data', 'CCD']])        
 
 
 
