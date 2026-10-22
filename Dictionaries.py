@@ -1,3 +1,4 @@
+import struct
 # ============================================================
 # Tables / Constants
 # ============================================================
@@ -1729,9 +1730,12 @@ def handle_resp_bmc_cc_parser(data):
     }
 
     #SNStr = SN.to_bytes((SN.bit_length() + 7) // 8, 'big').decode('ascii')
+    SN = ""
     for i in range(11, 30):
-        cc_response[19][1] = data[i] | (cc_response[19][1] << 8)
+        #cc_response[19][1] = data[i] | (cc_response[19][1] << 8)
+        SN = SN + "".join(chr(int(data[i])))
     for i in range(32, 255):
         cc_response[21][1] = data[i] | (cc_response[21][1] << 8)
-    
+
+    cc_response[19][1] = SN
     return cc_response
