@@ -4,7 +4,7 @@ import struct
 # ============================================================
 # ---- MCTP ----
 MCTP_MSG_TYPES = {
-    0x00: "Control",
+    0x00: "MCTP Control",
     0x01: "PLDM",
     0x05: "SPDM",
     0x04: "NVMe-MI",
@@ -364,6 +364,207 @@ DicAnnotations = {
     'START REPEAT':    [18, 'Start repeat', 'Sr'],
 }
 
+MCTP_CTRL_MESSAGES = {
+    0x01 : "Set Endpoint ID",
+    0x02 : "Get Endpoint ID",
+    0x03 : "Get Endpoint UUID",
+    0x04 : "Get MCTP Version Support",
+    0x05 : "Get Message Type Support",
+    0x06 : "Get Vendor Defined Message Support",
+    0x07 : "Resolve Endpoint ID",
+    0x08 : "Allocate Endpoint IDs",
+    0x09 : "Routing Information Update",
+    0x0A : "Get Routing Table Entries",
+    0x0B : "Prepare for Endpoint Discovery",
+    0x0C : "Endpoint Discovery",
+    0x0D : "Discovery Notify",
+    0x0E : "Get Network ID",
+    0x0F : "Query Hop",
+    0x10 : "Resolve UUID",
+    0x11 : "Query rate limit",
+    0x12 : "Request TX rate limit",
+    0x13 : "Update rate limit",
+    0x14 : "Query Supported Interfaces",
+    0xF0 : "Transport Specific",
+    0xF1 : "Transport Specific",
+    0xF2 : "Transport Specific",
+    0xF3 : "Transport Specific",
+    0xF4 : "Transport Specific",
+    0xF5 : "Transport Specific",
+    0xF6 : "Transport Specific",
+    0xF7 : "Transport Specific",
+    0xF8 : "Transport Specific",
+    0xF9 : "Transport Specific",
+    0xFA : "Transport Specific",
+    0xFB : "Transport Specific",
+    0xFC : "Transport Specific",
+    0xFD : "Transport Specific",
+    0xFE : "Transport Specific",
+    0xFF : "Transport Specific"
+}
+
+MCTP_CTRL_COMPLETION_CODES = {
+    0x00 : "SUCCESS",
+    0x01 : "ERROR",
+    0x02 : "ERROR_INVALID_DATA",
+    0x03 : "ERROR_INVALID_LENGTH",
+    0x04 : "ERROR_NOT_READY",
+    0x05 : "ERROR_UNSUPPORTED_CMD",
+    0x80 : "MESSAGE_TYPE_NUMBER_NOT_SUPPORTED", # Get MCTP Version Support completion code
+    0x80 : "INSUFFICIENT_SPACE", #Insufficient space to add requested entries to internal routing table,  Routing Information Update completion code
+    #0x80 - 0Xff : "COMMAND_SPECIFIC",
+}
+
+MCTP_CTRL_MESSAGE_TYPES = {
+    0x00 : "MCTP Control (DSP0236)",
+    0x01 : "PLDM (DSP0241)",
+    0x02 : "NC-SI  (DSP0261)",
+    0x03 : "Ethernet (DSP0261)",
+    0x04 : "NVMe MI (DSP0235)",
+    0x05 : "SPDM (DSP0275)",
+    0x06 : "Secured Messages (DSP0276)",
+    0x07 : "CXL FM API (DSP0234)",
+    0x08 : "CXL CCI (DSP0271)",
+    0x09 : "PCIe - MI (DSP0291)",
+    0x7E : "Vendor Defined - PCI  (DSP0236)",
+    0x7F : "Vendor Defined - IANA (DSP0236)",
+    0xFF : "MCTP Base Specification (DSP0236)"
+}
+
+MCTP_CTRL_PHYSICAL_MEDIUM_IDENTIFIER = {
+    0x00 : "Unspecified",
+    0x01 : "SMBus 2.0 100 kHz",
+    0x02 : "SMBus 2.0 or I2C 100 kHz",
+    0x03 : "I2C 100 kHz (Standard-mode)",
+    0x04 : "SMBus 3.0 or I2C 400 kHz (Fast-mode)",
+    0x05 : "SMBus 3.0 or I2C 1 MHz (Fast-mode Plus)",
+    0x06 : "I2C 3.4 MHz (High-speed mode)",
+    0x07 : "Reserved",
+    0x08 : "PCIe 1.1",
+    0x09 : "PCIe 2.0",
+    0x0A : "PCIe 2.1",
+    0x0B : "PCIe 3.x",
+    0x0C : "PCIe 4.x",
+    0x0D : "PCIe 5.x or CXL 1.x / 2.x",
+    0x0E : "PCIe 6.x Non-Flit Mode",
+    0x0F : "PCI", # (PCI 1.0, 2.0, 2.1, 2.2, 2.3, 3.0, PCI-X 1.0, PCI-X 2.0)
+    0x10 : "USB 1.1",
+    0x11 : "USB 2.0",
+    0x12 : "USB 3.0",
+    # 0x13 : 0X17,"Reserved",
+    0x14 : "Reserved",
+    0x15 : "Reserved",
+    0x16 : "Reserved",
+    0x17 : "Reserved",
+    0x18 : "NC-SI over RBT", # (A physical interface based on RMII as defined in DSP0222)",
+    0x19 : "MCTP UCIe", # (DSP0290)
+    0x1A : "MCTP PCC", # (DSP0292)
+    # 0x1B : 0X1F, "Reserved",
+    0x20 : "KCS Legacy", # (DSP0254 )Keyboard Controller Style (Fixed Address Decoding)",
+    0x21 : "KCS over PCI", # (DSP0254)Keyboard Controller Style (Base Class 0xC0 Subclass 0x01)",
+    0x22 : "Serial Host Legacy", # a register based UART interface(Fixed Address Decoding)",
+    0x23 : "Serial Host over PCI", # a register based UART interface(Base Class 0x07 Subclass 0x00)",
+    0x24 : "Asynchronous Serial", # an 8–bit asynchronous bi-directional(Between MCs and IMDs)",
+    # 0x25 : 0x2F, "Reserved",
+    0x30 : "I3C Basic",
+    # 0x31 : 0x3F, "Reserved",
+    0x40 : "PCIe 6.x Flit Mode or CXL 3.X",
+    # 0x41 : 0xFF, "Reserved"
+}
+
+MCTP_CTRL_PHYSICAL_TRANSPORT_IDENTIFIER = {
+    0x00 : "Reserved",
+    0x01 : "MCTP over SMBus",       # (DSP0237)",
+    0x02 : "MCTP over PCIe VDM",    # (DSP0238)",
+    0x03 : "MCTP over USB",     # (DSP0283)",
+    0x04 : "MCTP over KCS",     # (DSP0254)",
+    0x05 : "MCTP over Serial",  # (DSP0253)",
+    0x06 : "MCTP over I3C",     # (DSP0233)",
+    0x07 : "MCTP over MMBI",    # (DSP0284)",
+    0x08 : "MCTP over PCC",     # (DSP0292)",
+    0x09 : "MCTP over UCIe",    # (DSP0290)",
+    0xFF : "Vendor defined",
+    # NOTE: A vendor-defined transport binding must meet the requirements in DSP0236 (in
+    # particular, when being bridged to or from standard MCTP transport binding and media combinations).
+
+    ## All other values are reserved
+}
+
+MCTP_CTRL_HOST_INTERFACE_IDENTIFIER = {
+    0x01 : "Reserved",
+    0x02 : "KCS", # Keyboard Controller Style – refer to the section titled “Keyboard Controller Style (KCS) Interface” of IPMI",
+    0x03 : "8250 UART Register Compatible",
+    0x04 : "16450 UART Register Compatible",
+    0x05 : "16550/16550A UART Register Compatible",
+    0x06 : "16650/16650A UART Register Compatible",
+    0x07 : "16750/16750A UART Register Compatible",
+    0x08 : "16850/16850A UART Register Compatible",
+    0x09 : "I2C / SMBUS",
+    0x0A : "I3C",
+    0x0B : "PCIe VDM",
+    0x0C : "MMBI",
+    0x0D : "PCC",
+    0x0E : "UCIe",
+    0x0F : "USB",
+    0x10 : "Reserved",
+    # 0x10:0x3F Reserved
+    # all other Assigned by the SMBIOS specification (DSP0134)
+}
+
+MCTP_CTRL_EID_OPERATION = {
+    0x00 : "Set EID",
+    0x01 : "Force EID",
+    0x02 : "Reset EID",
+    0x03 : "Set Discovered Flag"
+}
+
+MCTP_CTRL_EID_ASSIGNMENT_STATUS = {
+    0x00 : "Accepted",
+    0x01 : "Rejected",
+}
+
+MCTP_CTRL_EID_ALLOCATION_STATUS = {
+    0x00 : "Don't use EID Pool",
+    0x01 : "Required EID Pool Allocation",
+    0x02 : "Already Allocated",
+}
+
+MCTP_CTRL_ENDPOINT_TYPE = {
+    0x00 : "Simple Endpoint",
+    0x01 : "Bus owner/Bridge",
+}
+
+MCTP_CTRL_ENDPOINT_ID_TYPE = {
+    0x00 : "Dynamic EID",
+    0x01 : "Static EID", # EID reflect the present setting
+    0x02 : "Static EID", # Present EID is same as the static value
+    0x03 : "Static EID", # Present EID is different than the static value
+}
+
+MCTP_CTRL_EID_ALLOCATION_OPERATION = {
+    0x0 : "Allocate",
+    0x1 : "Force Allocation",
+    0x2 : "Get Allocation Information",
+}
+
+MCTP_CTRL_ALLOCATION_STATUS = {
+    0x00 : "Accepted",
+    0x01 : "Rejected",
+}
+
+MCTP_CTRL_ENTRY_TYPE = {
+    0x00 : "Single Endpoint out Bridge",
+    0x01 : "EID Range with EIDbridge",
+    0x02 : "Single Endpoint in Bridge",
+    0x03 : "EID Range without EID bridge",
+}
+
+MCTP_CTRL_DYNAMIC_STATIC_ENTRY = {
+    0x00 : "Entry Dynamically created",
+    0x01 : "Entry Statically created",
+}
+
+
 # ------------- Headers Messages
 def handle_smbus_parser(data):
     smbus = {
@@ -399,6 +600,367 @@ def handle_mi_parser(data):
         6 :     ["MEB",             bool(data[2] & 0x1),                "Management Endpoint Buffer"],
     }
     return nvme
+
+def handle_mctp_control_parser(data):
+    mctp_ctrl = {
+        0 :     ["IC",              bool((data[0] >> 7) & 0x1),         "Integrity Check"],
+        1 :     ["MT",              data[0] & 0x7F,                     "Message Type"],
+        2 :     ["Rqbit",           bool((data[1] >> 7) & 0x1),         "Request bit"],
+        3 :     ["Dbit",            bool((data[1] >> 6) & 0x1),         "Datagram bit"],
+        5 :     ["IID",             data[1] & 0x1F,                     "Instance ID"],
+        6 :     ["CmdCd",           data[2],                            "Command Code"],
+    }
+    return mctp_ctrl
+
+
+
+
+def handle_set_endpoint_id_request(data):
+    set_endpoint_id = {
+        0 : ["OPE",     data[0] & 0x3,    "Operation"],
+        1 : ["EID",     data[1],    "Endpoint ID"],
+    }
+    set_endpoint_id[0][1] = MCTP_CTRL_EID_OPERATION.get(set_endpoint_id[0][1], "Reserved")
+    return set_endpoint_id
+
+def handle_set_endpoint_id_response(data):
+    set_endpoint_id_resp = {
+        0 : ["CmpCode",             data[0],    "Completition Code"],
+        1 : ["EIDAssSta",           (data[1] >> 4) & 0x3,   "EID assignment status"],
+        2 : ["EIDAllSta",           (data[1] & 0x3),    "EID allocation status"],
+        3 : ["EIDSett",             data[2],    "EID Setting"],
+        4 : ["EIDPS",               data[3],    "EID Pool Size"],
+    }
+    set_endpoint_id_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(set_endpoint_id_resp[0][1], "Reserved")
+    set_endpoint_id_resp[1][1] = MCTP_CTRL_EID_ASSIGNMENT_STATUS.get(set_endpoint_id_resp[1][1], "Reserved")
+    set_endpoint_id_resp[2][1] = MCTP_CTRL_EID_ALLOCATION_STATUS.get(set_endpoint_id_resp[2][1], "Reserved")
+    return set_endpoint_id_resp
+
+def handle_get_endpoint_id_response(data):
+    get_endpoint_id_resp = {
+        0 : ["CmpCode",             data[0],                "Completition Code"],
+        1 : ["EID",                 data[1],                "Endpoint ID"],
+        2 : ["ETp",                 data[2],                "Endpoint Type"],
+        3 : ["ETp",                 (data[2] >> 4) & 0x3,   "  Endpoint Type"],
+        4 : ["EIDTp",               data[2] & 0x3,          "  Endpoint ID Type"],
+        5 : ["OInf",                data[3],                "Other Information"],
+    }
+    get_endpoint_id_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(get_endpoint_id_resp[0][1], "Reserved")
+    get_endpoint_id_resp[3][1] = MCTP_CTRL_ENDPOINT_TYPE.get(get_endpoint_id_resp[3][1], "Reserved")
+    get_endpoint_id_resp[4][1] = MCTP_CTRL_ENDPOINT_ID_TYPE.get(get_endpoint_id_resp[4][1], "Reserved")
+    return get_endpoint_id_resp
+
+def handle_get_endpoint_uuid_response(data):
+    get_endpoint_uuid_resp = {
+        0 : ["CmpCode",             data[0],                "Completition Code"],
+        1 : ["UUID",                data[1:16],             "Endpoint UUID"],
+        2 : ["TL",                  data[1:4],              "time low"],
+        3 : ["TM",                  data[5:6],              "time mid"],
+        4 : ["TH",                  data[7:8],              "time high and version"],
+        5 : ["CS",                  data[9:10],             "clock seq and reserved"],
+        6 : ["Nd",                  data[11:16],            "node"],
+    }
+    get_endpoint_uuid_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(get_endpoint_uuid_resp[0][1], "Reserved")
+    return get_endpoint_uuid_resp
+
+def handle_get_mctp_version_request(data):
+    get_mctp_version_req = {
+        0 : ["MTN",                 data[0],                "Message Type Number"],
+    }
+    get_mctp_version_req[0][1] = MCTP_CTRL_MESSAGE_TYPES.get(get_mctp_version_req[0][1], "Reserved")
+
+    return get_mctp_version_req
+
+def handle_get_mctp_version_response(data):
+    get_mctp_version_resp = {
+        0 : ["CmpCode",             data[0],                "Completition Code"],
+        1 : ["VNEC",                data[1],                "Version Number Entry Count"],
+    }
+
+    for i in range(0, get_mctp_version_resp[1][1] + 1):
+        get_mctp_version_resp[2 + (i * 5)] = ["TL%d" % (i + 1),   data[(2 + (i * 4)) : (5 + (i * 4))], "Version Number entry %d" % (i + 1)]
+        get_mctp_version_resp[3 + (i * 5)] = ["A",   data[(2 + (i * 4))], "Aplha"]
+        get_mctp_version_resp[4 + (i * 5)] = ["UVN",   data[(3 + (i * 4))], "Update Version Number"]
+        get_mctp_version_resp[5 + (i * 5)] = ["MnVN",   data[(4 + (i * 4))], "Minor Version Number"]
+        get_mctp_version_resp[6 + (i * 5)] = ["MjVN",   data[(5 + (i * 4))], "Major Version Number"]
+    get_mctp_version_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(get_mctp_version_resp[0][1], "Reserved")
+    return get_mctp_version_resp
+
+def handle_get_message_type_support_response(data):
+    get_message_type_support_resp = {
+        0 : ["CmpCode",             data[0],                "Completition Code"],
+        1 : ["MMTC",                 data[1],                "MCTP Message Type Count"],
+    }
+
+    for i in range(0, get_message_type_support_resp[1][1] + 1):
+        get_message_type_support_resp[2 + i] = ["MMT%d" % (i + 1),   data[2 + i], "MCTP Message Type %d" % (i + 1)]
+        get_message_type_support_resp[2 + i][1] = MCTP_CTRL_MESSAGE_TYPES.get(get_message_type_support_resp[2 + i][1], "Reserved")
+    get_message_type_support_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(get_message_type_support_resp[0][1], "Reserved")
+    return get_message_type_support_resp
+
+def handle_get_vendor_defined_message_support_request(data):
+    get_vendor_defined_message_support_req = {
+        0 : ["VIDSS",     data[0],                "Vendor ID Set Selector"],
+    }
+    return get_vendor_defined_message_support_req
+
+def handle_get_vendor_defined_message_support_response(data):
+    get_vendor_defined_message_support_resp = {
+        0 : ["CmpCode",     data[0],                "Completition Code"],
+        1 : ["VIDSSel",      data[1],                "Vendor ID Set Selector"],
+    }
+    get_vendor_defined_message_support_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(get_vendor_defined_message_support_resp[0][1], "Reserved")
+    if get_vendor_defined_message_support_resp[1][1] < 0xFF:
+        get_vendor_defined_message_support_resp[2] = ["VIDF",   data[2], "Vendor ID Format"]
+        if get_vendor_defined_message_support_resp[2][1] == 0:
+            get_vendor_defined_message_support_resp[3] = ["VIDD",   data[3:4], "Vendor ID Data"]
+            get_vendor_defined_message_support_resp[4] = ["VID",   data[5:6], "Vendor ID"]
+        elif get_vendor_defined_message_support_resp[2][1] == 1:
+            get_vendor_defined_message_support_resp[3] = ["VIDD",   data[3:6], "Vendor ID Data"]
+            get_vendor_defined_message_support_resp[4] = ["VID",   data[7:8], "Vendor ID"]
+    return get_vendor_defined_message_support_resp
+
+def handle_resolve_endpoint_id_request(data):
+    resolve_endpoint_id_req = {
+        0 : ["TEID",     data[0],                "Target Endpoint ID"],
+    }
+    return resolve_endpoint_id_req
+
+def handle_resolve_endpoint_id_response(data):
+    resolve_endpoint_id_resp = {
+        0 : ["CmpCode",     data[0],                "Completion Code"],
+        1 : ["BEID",     data[1],                "Bridge Endpoint ID"],
+        2 : ["PA",     data[2:-1],                "Physical Address"]
+    }
+    resolve_endpoint_id_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(resolve_endpoint_id_resp[0][1], "Reserved")
+    return resolve_endpoint_id_resp
+
+def handle_allocate_endpoint_ids_request(data):
+    allocate_endpoint_ids_req = {
+        0 : ["OPE",     data[0] & 0x3,    "Operation"],
+        1 : ["NEID",     data[1],    "Number of Endpoint IDs"],
+        2 : ["SEID",     data[2],    "Starting Endpoint ID"],
+    }
+
+    allocate_endpoint_ids_req[0][1] = MCTP_CTRL_EID_ALLOCATION_OPERATION.get(allocate_endpoint_ids_req[0][1], "Reserved")
+    return allocate_endpoint_ids_req
+
+def handle_allocate_endpoint_ids_response(data):
+    allocate_endpoint_ids_resp = {
+        0 : ["CmpCode",     data[0],                "Completion Code"],
+        1 : ["AS",     data[1] & 0x3,                "Allocation status"],
+        2 : ["EIDPS",     data[2],                "Endpoint ID Pool Size"],
+        3 : ["FEID",     data[3],                "First Endpoint ID"],
+    }
+    allocate_endpoint_ids_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(allocate_endpoint_ids_resp[0][1], "Reserved")
+    allocate_endpoint_ids_resp[1][1] = MCTP_CTRL_ALLOCATION_STATUS.get(allocate_endpoint_ids_resp[1][1], "Reserved")
+    return allocate_endpoint_ids_resp
+
+def handle_routing_information_update_request(data):
+    routing_information_update_req = {
+        0 : ["NUE",     data[0],                "Count of update entries"],
+        1 : ["UED",       data[1:-1],                "Update Entries Data"],
+    }
+    return routing_information_update_req
+
+def handle_routing_information_update_response(data):
+    routing_information_update_resp = {
+        0 : ["CmpCode",     data[0],                "Completion Code"],
+    }
+    routing_information_update_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(routing_information_update_resp[0][1], "Reserved")
+    return routing_information_update_resp
+
+def handle_get_routing_table_entries_request(data):
+    get_routing_table_entries_req = {
+        0 : ["EH",     data[0],                "Entry Handle"],
+    }
+    return get_routing_table_entries_req
+
+def handle_get_routing_table_entries_response(data):
+    get_routing_table_entries_resp = {
+        0 : ["CmpCode",     data[0],                "Completion Code"],
+        1 : ["NEH",        data[1],                "Next Entry Handle"],
+        2 : ["NRE",        data[2],                "Number of routing table entries"],
+    }
+    get_routing_table_entries_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(get_routing_table_entries_resp[0][1], "Reserved")
+    for i in range(0, get_routing_table_entries_resp[2][1]):
+        get_routing_table_entries_resp[3 + (i * 10)] = ["SEIDR", data[3 + (i * 10)], "Size of EID range"]
+        get_routing_table_entries_resp[4 + (i * 10)] = ["SEID", data[4 + (i * 10)], "Starting EID"]
+        get_routing_table_entries_resp[5 + (i * 10)] = ["ET", (data[5 + (i * 10)] >> 6) & 0x3, "  Entry Type"]
+        get_routing_table_entries_resp[6 + (i * 10)] = ["D/SE", (data[5 + (i * 10)] >> 5) & 0x1, "  Dynamic/Static Entry"]
+        get_routing_table_entries_resp[7 + (i * 10)] = ["PN", (data[5 + (i * 10)] & 0xF), "  Port number"]
+        get_routing_table_entries_resp[8 + (i * 10)] = ["PTBI", data[6 + (i * 10)], "Physical Transport Binding Identifier"]
+        get_routing_table_entries_resp[9 + (i * 10)] = ["PMTI", data[7 + (i * 10)], "Physical Media Type Identifier"]
+        get_routing_table_entries_resp[10 + (i * 10)] = ["PAS", data[8 + (i * 10)], "Physical Address Size"]
+        get_routing_table_entries_resp[11 + (i * 10)] = ["PA", data[9 + (i * 10):9 + (i * 10) + get_routing_table_entries_resp[10 + (i * 10)][1]], "Physical Address"]
+        get_routing_table_entries_resp[12 + (i * 10)] = ["RTE%d" % i, data[3 + (i * 10):9 + (i * 10) + get_routing_table_entries_resp[10 + (i * 10)][1]], "Routing Table Entry %d" % i]
+        get_routing_table_entries_resp[5 + (i * 10)][1] = MCTP_CTRL_ENTRY_TYPE.get(get_routing_table_entries_resp[5 + (i * 10)][1])
+        get_routing_table_entries_resp[6 + (i * 10)][1] = MCTP_CTRL_DYNAMIC_STATIC_ENTRY.get(get_routing_table_entries_resp[6 + (i * 10)][1])
+        get_routing_table_entries_resp[8 + (i * 10)][1] = MCTP_CTRL_PHYSICAL_TRANSPORT_IDENTIFIER.get(get_routing_table_entries_resp[8 + (i * 10)][1])
+        get_routing_table_entries_resp[9 + (i * 10)][1] = MCTP_CTRL_PHYSICAL_MEDIUM_IDENTIFIER.get(get_routing_table_entries_resp[9 + (i * 10)][1])
+    return get_routing_table_entries_resp
+
+def handle_prepare_for_endpoint_discovery_response(data):
+    prepare_for_endpoint_discovery_resp = {
+        0 : ["CmpCode",     data[0],                "Completion Code"],
+    }
+    prepare_for_endpoint_discovery_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(prepare_for_endpoint_discovery_resp[0][1], "Reserved")
+    return prepare_for_endpoint_discovery_resp
+    
+def handle_endpoint_discovery_response(data):
+    endpoint_discovery_resp = {
+        0 : ["CmpCode",     data[0],                "Completion Code"],
+    }
+    endpoint_discovery_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(endpoint_discovery_resp[0][1], "Reserved")
+    return endpoint_discovery_resp
+    
+def handle_discovery_notify_response(data):
+    discovery_notify_resp = {
+        0 : ["CmpCode",     data[0],                "Completion Code"],
+    }
+    discovery_notify_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(discovery_notify_resp[0][1], "Reserved")
+    return discovery_notify_resp
+    
+def handle_get_network_id_response(data):
+    get_network_id_resp = {
+        0 : ["CmpCode",     data[0],                "Completion Code"],
+        1 : ["NID",        data[1:16],                "Network ID"],
+        2 : ["TL",                  data[1:4],              "time low"],
+        3 : ["TM",                  data[5:6],              "time mid"],
+        4 : ["TH",                  data[7:8],              "time high and version"],
+        5 : ["CS",                  data[9:10],             "clock seq and reserved"],
+        6 : ["Nd",                  data[11:16],            "node"],
+    }
+    get_network_id_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(get_network_id_resp[0][1], "Reserved")
+    return get_network_id_resp
+    
+def handle_query_hop_request(data):
+    query_hop_req = {
+        0 : ["TEID", data[0], "Target Endpoint ID"],
+        1 : ["MT", data[1], "Message Type"]
+    }
+    return query_hop_req
+    
+def handle_query_hop_response(data):
+    query_hop_resp = {
+        0 : ["CmpCode",     data[0],                "Completion Code"],
+        1 : ["EIDN", data[1], "EID next bridge"],
+        2 : ["MT", data[2], "Message Type"],
+        3 : ["MITUS", data[3:4], "Maximum supported Incoming Transmision Size"],
+        4 : ["MOTUS", data[5:6], "Maximum supported Outcoming Transmision Size"] 
+    }
+    query_hop_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(query_hop_resp[0][1], "Reserved")
+    return query_hop_resp
+    
+def handle_resolve_uuid_request(data):
+    resolve_uuid_req = {
+        0 : ["RUUID", data[0:15], "Requested UUID"],
+        1 : ["EH", data[16], "Entry Handle"]
+    }
+    return resolve_uuid_req
+    
+def handle_resolve_uuid_response(data):
+    resolve_uuid_resp = {
+        0 : ["CmpCode",     data[0],                "Completion Code"],
+        1 : ["NEH", data[1], "Next Entry Handle"],
+        2 : ["NEID",     data[2],    "Number of Endpoint IDs"],
+    }
+    resolve_uuid_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(resolve_uuid_resp[0][1], "Reserved")
+    for i in range(0, resolve_uuid_resp[2][1]):
+        resolve_uuid_resp[4 + (i * 6)] = ["EID%d" % i, data[4 + (i * 6)], "Endpoint ID %d" % i]
+        resolve_uuid_resp[5 + (i * 6)] = ["PTBTI%d" % i, data[5 + (i * 6)], "Physical Transport Binding Type Identifier %d" % i]
+        resolve_uuid_resp[6 + (i * 6)] = ["PMTI%d" % i, data[6 + (i * 6)], "Physical Media Type Identifier %d" % i]
+        resolve_uuid_resp[7 + (i * 6)] = ["PAS%d" % i, data[7 + (i * 6)], "Physical Address Size %d" % i]
+        resolve_uuid_resp[8 + (i * 6)] = ["PA%d" % i, data[8 + (i * 6):8 + (i * 6) + resolve_uuid_resp[7 + (i * 6)][1]], "Physical Address %d" % i]
+        resolve_uuid_resp[3 + (i * 6)] = ["RTE%d" % i, data[3 + (i * 6):8 + (i * 6) + resolve_uuid_resp[7 + (i * 6)][1]], "Routing table entry %d" % i]
+        resolve_uuid_resp[5 + (i * 6)][1] = MCTP_CTRL_PHYSICAL_TRANSPORT_IDENTIFIER.get(resolve_uuid_resp[5 + (i * 6)][1])
+        resolve_uuid_resp[6 + (i * 6)][1] = MCTP_CTRL_PHYSICAL_MEDIUM_IDENTIFIER.get(resolve_uuid_resp[6 + (i * 6)][1])
+    return resolve_uuid_resp
+    
+def handle_query_rate_limit_response(data):
+    query_rate_limit_resp = {
+        0 : ["CmpCode",     data[0],                "Completion Code"],
+        1 : ["RxBS",  data[1:4],                "RX: burst size"],
+        2 : ["RxMRL",  data[5:8],                "RX: maximum rate limit,"],
+        3 : ["TxMRL",  data[9:12],                "TX: Maximum rate limit"],
+        4 : ["TxMinRL",  data[13:16],                "TX: Minimum rate limit"],
+        5 : ["TxBS",  data[17:19],                "TX: burst size"],
+        6 : ["TxPRLBS",  data[20:22],                "TX Present Rate Limit Burst"],
+        7 : ["TxEIDMRL",  data[23:26],                "Tx EID Maximal rate limit"],
+        8 : ["TxRLC",  data[27],                "TX Rate limiter capabilities"],
+        9 : ["TxRLO",  bool(data[27] & 0x02),                "  TX Rate limiting operation  "],
+        10 : ["TxRLSEID",  bool(data[27] & 0x01),                "  TX Rate limiting Support on EID"]
+    }
+    query_rate_limit_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(query_rate_limit_resp[0][1], "Reserved")
+    return query_rate_limit_resp
+    
+def handle_request_tx_rate_limit_request(data):
+    request_tx_rate_limit_req = {
+        0 : ["TxBS",     data[0:3],                "Tx: EID maximal burst size"],
+        1 : ["TxMRL",  data[4:6],                "TX: Maximum rate limit"]
+
+    }
+    return request_tx_rate_limit_req
+    
+def handle_request_tx_rate_limit_response(data):
+    request_tx_rate_limit_resp = {
+        0 : ["CmpCode",     data[0],                "Completion Code"],
+        1 : ["TxBS",  data[1:4],                "TX: EID burst size"],
+        2 : ["TxEIDMRL",  data[5:8],                "TX: EID rate limit,"],
+    }
+    request_tx_rate_limit_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(request_tx_rate_limit_resp[0][1], "Reserved")
+    return request_tx_rate_limit_resp
+    
+def handle_update_rate_limit_request(data):
+    update_rate_limit_req = {
+        0 : ["TxBS",  data[0:2],                "TX: EID burst size"],
+        1 : ["TxEIDMRL",  data[3:6],                "TX: EID rate limit,"],
+    }
+    return update_rate_limit_req
+    
+def handle_update_rate_limit_response(data):
+    update_rate_limit_resp = {
+        0 : ["CmpCode",     data[0],                "Completion Code"],
+    }
+    update_rate_limit_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(update_rate_limit_resp[0][1], "Reserved")
+    return update_rate_limit_resp
+    
+def handle_query_supported_interfaces_response(data):
+    query_supported_interfaces_resp = {
+        0 : ["CmpCode",     data[0],                "Completion Code"],
+        1 : ["SIC",     data[1],                "Supported Interfaces Count"]
+    }
+    query_supported_interfaces_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(query_supported_interfaces_resp[0][1], "Reserved")
+    for i in range(query_supported_interfaces_resp[1][1]):
+        query_supported_interfaces_resp[2 + (i * 2)] = ["IT%d" % i,     data[2 + (i * 2)],                "Interface Type %d" % i]
+        query_supported_interfaces_resp[3 + (i * 2)] = ["IEID%d" % i,     data[3 + (i * 2)],                "Interface EID %d" % i]
+        query_supported_interfaces_resp[2 + (i * 2)][1] = MCTP_CTRL_PHYSICAL_MEDIUM_IDENTIFIER.get(query_supported_interfaces_resp[2 + (i * 2)][1])
+
+    return query_supported_interfaces_resp
+    
+def handle_transport_specific_request(data):
+    transport_specific_req = {
+        0 : ["PTBI",     data[0],                "MCTP Physical Transport Binding Identifier"],
+        1 : ["PBI",     data[1],                "MCTP Physical Media Identifier"],
+        2 : ["TSCD",     data[2:-1],                "Transport specific command data"]
+    }
+    transport_specific_req[0][1] = MCTP_CTRL_PHYSICAL_TRANSPORT_IDENTIFIER.get(transport_specific_req[0][1])
+    transport_specific_req[1][1] = MCTP_CTRL_PHYSICAL_MEDIUM_IDENTIFIER.get(transport_specific_req[1][1])
+    return transport_specific_req
+    
+def handle_transport_specific_response(data):
+    transport_specific_resp = {
+        0 : ["CmpCode",     data[0],                "Completion Code"],
+    }
+    transport_specific_resp[0][1] = MCTP_CTRL_COMPLETION_CODES.get(transport_specific_resp[0][1], "Reserved")
+    return transport_specific_resp
+
+
+
+
+
+
+
 
 def handle_generic_error_response(data):
     genErrResp = {
