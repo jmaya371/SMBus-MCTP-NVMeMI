@@ -1485,7 +1485,6 @@ class Decoder(srd.Decoder):
             "%s: %02X | %s ► %s: %r → %s: %r → %s: %r → %s: %r → %s: %r → %s: %r → %s: %d" %
             (cc_response[0][0], cc_response[0][1], cc_response[1][0], cc_response[1][1], cc_response[2][0], cc_response[2][1], cc_response[3][0], cc_response[3][1], cc_response[4][0], cc_response[4][1], cc_response[5][0], cc_response[5][1], cc_response[6][0], cc_response[6][1], cc_response[7][0], cc_response[7][1], cc_response[8][0], cc_response[8][1]),
             "%s | %s ► %s → %s → %s → %s → %s → %s → %s" % (cc_response[0][0], cc_response[1][0], cc_response[2][0], cc_response[3][0], cc_response[4][0], cc_response[5][0], cc_response[6][0], cc_response[7][0], cc_response[8][0])]])
-
             self.put(self.packets[1][0], self.packets[EndByte][1], self.out_ann, [4, 
             ["%s: %02X | %s: %02X | %s: %02X | %s: %02X | %s ► %s: %r → %s: %02X | %s: %02X" %
             (cc_response[9][2], cc_response[9][1], cc_response[10][2], cc_response[10][1], cc_response[11][2], cc_response[11][1], cc_response[12][2], cc_response[12][1], cc_response[13][2], cc_response[13][1], cc_response[14][2], cc_response[14][1], cc_response[15][2], cc_response[15][1], cc_response[16][2], cc_response[16][1]),
@@ -1512,14 +1511,12 @@ class Decoder(srd.Decoder):
             "%s: %02X | %s ► %s: %r → %s: %r → %s: %r → %s: %r → %s: %r → %s: %r → %s: %d" %
             (cc_response[0][0], cc_response[0][1], cc_response[1][0], cc_response[1][1], cc_response[2][0], cc_response[2][1], cc_response[3][0], cc_response[3][1], cc_response[4][0], cc_response[4][1], cc_response[5][0], cc_response[5][1], cc_response[6][0], cc_response[6][1], cc_response[7][0], cc_response[7][1], cc_response[8][0], cc_response[8][1]),
             "%s | %s ► %s → %s → %s → %s → %s → %s → %s" % (cc_response[0][0], cc_response[1][0], cc_response[2][0], cc_response[3][0], cc_response[4][0], cc_response[5][0], cc_response[6][0], cc_response[7][0], cc_response[8][0])]])
-
             self.put(self.packets[1][0], self.packets[EndByte][1], self.out_ann, [4, 
             ["%s: %02X | %s: %02X | %s: %02X | %s: %02X | %s ► %s: %r → %s: %02X | %s: %02X" %
             (cc_response[9][2], cc_response[9][1], cc_response[10][2], cc_response[10][1], cc_response[11][2], cc_response[11][1], cc_response[12][2], cc_response[12][1], cc_response[13][2], cc_response[13][1], cc_response[14][2], cc_response[14][1], cc_response[15][2], cc_response[15][1], cc_response[16][2], cc_response[16][1]),
             "%s: %02X | %s: %02X | %s: %02X | %s: %02X | %s ► %s: %r → %s: %02X | %s: %02X" %
             (cc_response[9][0], cc_response[9][1], cc_response[10][0], cc_response[10][1], cc_response[11][0], cc_response[11][1], cc_response[12][0], cc_response[12][1], cc_response[13][0], cc_response[13][1], cc_response[14][0], cc_response[14][1], cc_response[15][0], cc_response[15][1], cc_response[16][0], cc_response[16][1]),
             "%s | %s | %s | %s | %s ► %s → %s | %s" % (cc_response[9][0], cc_response[10][0], cc_response[11][0], cc_response[12][0], cc_response[13][0], cc_response[14][0], cc_response[15][0], cc_response[16][0])]])
-
             self.put(self.packets[1][0], self.packets[EndByte][1], self.out_ann, [4, 
             ["%s: %02X | %s: %04X | %s: %X | %s: %02X" % (cc_response[17][2], cc_response[17][1], cc_response[18][2], cc_response[18][1], cc_response[19][2], cc_response[19][1], cc_response[20][2], cc_response[20][1]),
             "%s: %02X | %s: %04X | %s: %X | %s: %02X" % (cc_response[17][0], cc_response[17][1], cc_response[18][0], cc_response[18][1], cc_response[19][0], cc_response[19][1], cc_response[20][0], cc_response[20][1]),
